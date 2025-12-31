@@ -11,7 +11,9 @@ import {
     ArrowRight,
     Sparkles,
     ChevronDown,
-    Info
+    Info,
+    Plus,
+    Smile
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -193,28 +195,82 @@ export default function ResearchPage() {
                                 initial={{ opacity: 0, x: 20 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 exit={{ opacity: 0, x: -20 }}
-                                className="glass-card p-12 border-border/50 flex flex-col items-center text-center space-y-6"
+                                className="space-y-6"
                             >
-                                <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                                    <Users2 className="w-10 h-10 text-primary" />
-                                </div>
-                                <div>
-                                    <h2 className="text-2xl font-bold mb-2">Avatar Discovery</h2>
-                                    <p className="text-muted-foreground max-w-md">Let's build a deep persona profile. Who are we truly speaking to in this campaign?</p>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-lg">
-                                    <button className="p-6 bg-secondary/30 border border-border rounded-2xl flex flex-col items-center gap-4 hover:border-primary transition-all">
-                                        <div className="w-12 h-12 rounded-xl premium-gradient flex items-center justify-center text-white">
-                                            <Sparkles className="w-6 h-6" />
+                                <div className="glass-card p-8 border-border/50">
+                                    <div className="flex items-center justify-between mb-8 pb-4 border-b border-border/50">
+                                        <div>
+                                            <h2 className="text-xl font-bold">Avatar Profile</h2>
+                                            <p className="text-sm text-muted-foreground">Who is the primary decision maker?</p>
                                         </div>
-                                        <div className="text-sm font-bold">Generate from Resources</div>
-                                    </button>
-                                    <button className="p-6 bg-secondary/30 border border-border rounded-2xl flex flex-col items-center gap-4 hover:border-primary transition-all">
-                                        <div className="w-12 h-12 rounded-xl bg-card border border-border flex items-center justify-center text-muted-foreground">
-                                            <Plus className="w-6 h-6" />
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Avatar Name</label>
+                                            <input type="text" placeholder="e.g. Agency Owner Adam" className="w-full bg-secondary/50 border border-border/50 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-1 focus:ring-primary font-medium" />
                                         </div>
-                                        <div className="text-sm font-bold">Build Manually</div>
-                                    </button>
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Core Motivation</label>
+                                            <input type="text" placeholder="e.g. Freedom, Status, Scale" className="w-full bg-secondary/50 border border-border/50 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-1 focus:ring-primary font-medium" />
+                                        </div>
+                                        <div className="md:col-span-2 space-y-2">
+                                            <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Current Situation (Status Quo)</label>
+                                            <textarea rows={2} placeholder="Where are they right now?" className="w-full bg-secondary/50 border border-border/50 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-1 focus:ring-primary font-medium resize-none" />
+                                        </div>
+                                        <div className="md:col-span-2 space-y-2">
+                                            <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Goal Situation (Paradise)</label>
+                                            <textarea rows={2} placeholder="Where do they want to be?" className="w-full bg-secondary/50 border border-border/50 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-1 focus:ring-primary font-medium resize-none" />
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-8 flex justify-between">
+                                        <button onClick={() => setActiveSection('market')} className="px-6 py-3 border border-border rounded-xl text-sm font-bold hover:bg-secondary transition-all">Previous</button>
+                                        <button onClick={() => setActiveSection('pains')} className="px-8 py-3 bg-primary text-white rounded-xl text-sm font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all">Next: Pains & Desires</button>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+
+                        {activeSection === 'pains' && (
+                            <motion.div
+                                key="pains"
+                                initial={{ opacity: 0, x: 20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: -20 }}
+                                className="space-y-6"
+                            >
+                                <div className="glass-card p-8 border-border/50">
+                                    <h2 className="text-xl font-bold mb-8">Pains & Desires</h2>
+
+                                    <div className="space-y-8">
+                                        <div className="p-6 bg-red-500/5 border border-red-500/20 rounded-3xl">
+                                            <h3 className="text-sm font-bold uppercase text-red-500 mb-4 flex items-center gap-2">
+                                                <Frown className="w-4 h-4" />
+                                                Core Pains
+                                            </h3>
+                                            <div className="space-y-4">
+                                                <input type="text" placeholder="Pain 1: e.g. Leads are too expensive" className="w-full bg-background border border-border/50 rounded-xl py-3 px-4 text-sm" />
+                                                <input type="text" placeholder="Pain 2: e.g. Sales cycle is too long" className="w-full bg-background border border-border/50 rounded-xl py-3 px-4 text-sm" />
+                                            </div>
+                                        </div>
+
+                                        <div className="p-6 bg-green-500/5 border border-green-500/20 rounded-3xl">
+                                            <h3 className="text-sm font-bold uppercase text-green-500 mb-4 flex items-center gap-2">
+                                                <Smile className="w-4 h-4" />
+                                                Deepest Desires
+                                            </h3>
+                                            <div className="space-y-4">
+                                                <input type="text" placeholder="Desire 1: e.g. Completely automated acquisition" className="w-full bg-background border border-border/50 rounded-xl py-3 px-4 text-sm" />
+                                                <input type="text" placeholder="Desire 2: e.g. Reaching $100k months" className="w-full bg-background border border-border/50 rounded-xl py-3 px-4 text-sm" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-12 pt-8 border-t border-border/50 flex justify-between">
+                                        <button onClick={() => setActiveSection('avatar')} className="px-6 py-3 border border-border rounded-xl text-sm font-bold hover:bg-secondary transition-all">Previous</button>
+                                        <button className="px-8 py-3 premium-gradient text-white rounded-xl text-sm font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all">Finish Research</button>
+                                    </div>
                                 </div>
                             </motion.div>
                         )}

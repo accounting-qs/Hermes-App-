@@ -1,6 +1,31 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  --color-background: #0a0a0c;
+  --color-foreground: #f8fafc;
+  --color-card: #111114;
+  --color-card-foreground: #f8fafc;
+  --color-popover: #111114;
+  --color-popover-foreground: #f8fafc;
+  --color-primary: #6366f1;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #1e1e24;
+  --color-secondary-foreground: #f8fafc;
+  --color-muted: #1e1e24;
+  --color-muted-foreground: #94a3b8;
+  --color-accent: #6366f1;
+  --color-accent-foreground: #ffffff;
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #f8fafc;
+  --color-border: #27272a;
+  --color-input: #27272a;
+  --color-ring: #6366f1;
+
+  --radius-xl: 0.75rem;
+  --radius-lg: calc(0.75rem - 2px);
+  --radius-md: calc(0.75rem - 4px);
+  --radius-sm: calc(0.75rem - 6px);
+}
 
 :root {
   --background: #0a0a0c;
@@ -32,17 +57,25 @@
 
 @layer base {
   * {
-    @apply border-border;
+    border-color: var(--border);
   }
+
   body {
-    @apply bg-background text-foreground transition-colors duration-300;
+    background-color: var(--background);
+    color: var(--foreground);
+    transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 300ms;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
 
 @layer components {
   .glass-card {
-    @apply bg-[var(--glass-bg)] backdrop-blur-[var(--glass-blur)] border border-[var(--glass-border)] rounded-[var(--radius)];
+    background-color: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
     box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
   }
 
@@ -51,7 +84,10 @@
   }
 
   .premium-text-gradient {
-    @apply bg-clip-text text-transparent premium-gradient;
+    background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
 
   .animate-float {
@@ -59,8 +95,16 @@
   }
 
   @keyframes float {
-    0% { transform: translateY(0px); }
-    50% { transform: translateY(-10px); }
-    100% { transform: translateY(0px); }
+    0% {
+      transform: translateY(0px);
+    }
+
+    50% {
+      transform: translateY(-10px);
+    }
+
+    100% {
+      transform: translateY(0px);
+    }
   }
 }

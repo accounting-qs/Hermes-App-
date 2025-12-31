@@ -12,16 +12,25 @@ import { QuantumCopilot } from "@/components/copilot/Copilot";
 export function ClientLayout({ children }: { children: React.ReactNode }) {
     const { isAuthenticated, user } = useAuthStore();
     const { selectedBrandId } = useBrandStore();
+    const [mounted, setMounted] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const router = useRouter();
     const pathname = usePathname();
 
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
     // Handle default redirect to dashboard if authenticated
     useEffect(() => {
-        if (isAuthenticated && pathname === "/") {
+        if (mounted && isAuthenticated && pathname === "/") {
             router.push("/dashboard");
         }
-    }, [isAuthenticated, pathname, router]);
+    }, [isAuthenticated, pathname, router, mounted]);
+
+    if (!mounted) {
+        return <div className="min-h-screen bg-background" />; // Minimal blank screen while mounting
+    }
 
     if (!isAuthenticated) {
         return <>{children}</>;
