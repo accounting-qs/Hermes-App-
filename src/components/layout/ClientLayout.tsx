@@ -23,25 +23,41 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
         setMounted(true);
     }, []);
 
-    useEffect(() => {
-        console.log('ClientLayout: AuthState Sync', { mounted, isLoading, isAuthenticated, pathname });
-        if (mounted && !isLoading && isAuthenticated && pathname === "/") {
-            console.log('ClientLayout: Redirecting from / to /dashboard');
-            router.push("/dashboard");
-        }
-    }, [isAuthenticated, pathname, router, mounted, isLoading]);
+    // Only allow public routes (/login, /unauthorized, /auth/callback) to render without authentication
+    const isPublicRoute = pathname === '/login' || pathname === '/unauthorized' || pathname.startsWith('/auth/callback');
 
+    if (isPublicRoute) {
+        return <div className="min-h-screen bg-background">{children}</div>;
+    }
+
+    // Loader logic: if not mounted OR if the auth context is still figuring out if we are logged in/whitelisted
     if (!mounted || isLoading) {
         return (
-            <div className="min-h-screen bg-background flex items-center justify-center">
-                <div className="w-10 h-10 border-4 border-primary border-t-transparent animate-spin rounded-full" />
+            <div className="min-h-screen bg-background flex flex-col items-center justify-center relative overflow-hidden">
+                {/* Premium Background Effects */}
+                <div className="absolute inset-0 premium-gradient opacity-5" />
+                <motion.div
+                    animate={{ scale: [1, 1.2, 1], opacity: [0.1, 0.2, 0.1] }}
+                    transition={{ duration: 5, repeat: Infinity }}
+                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/10 rounded-full blur-[100px]"
+                />
+
+                <div className="relative z-10 flex flex-col items-center gap-6">
+                    <div className="w-16 h-16 border-4 border-primary border-t-transparent animate-spin rounded-full shadow-lg shadow-primary/20" />
+                    <div className="text-[10px] font-black uppercase tracking-[0.4em] text-muted-foreground animate-pulse">
+                        Authenticating System
+                    </div>
+                </div>
             </div>
         );
     }
 
     if (!isAuthenticated) {
-        return <div className="min-h-screen bg-background">{children}</div>;
+        return null; // The auth context or middleware will handle the push
     }
+
+
+
 
     return (
         <div className="flex h-screen overflow-hidden bg-background text-foreground transition-colors duration-300">

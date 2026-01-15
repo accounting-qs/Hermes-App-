@@ -1,33 +1,59 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
     Users as UsersIcon,
-    UserPlus,
+    Plus,
     Search,
     Filter,
     MoreVertical,
     ShieldCheck,
     Mail,
     Clock,
-    CheckCircle2,
-    XCircle,
     Briefcase
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { InviteUserModal } from "@/components/modals/InviteUserModal";
+import { createClient } from "@/lib/supabase-ssr/client";
 
 export default function UsersPage() {
     const [activeTab, setActiveTab] = useState<'all' | 'qs_team' | 'clients'>('all');
     const [searchQuery, setSearchQuery] = useState("");
+    const [users, setUsers] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isModalOpen, setIsModalOpen] = useState(false);
 
-    const users = [
-        { id: '1', name: 'Chris Welker', email: 'chris@quantumscale.ai', role: 'qs_team', subType: 'Lead Coach', status: 'active', brandCount: 12, lastActive: '2 mins ago' },
-        { id: '2', name: 'Angela Smith', email: 'angela@quantumscale.ai', role: 'qs_team', subType: 'Operations', status: 'active', brandCount: 8, lastActive: '1 hour ago' },
-        { id: '3', name: 'David Miller', email: 'david@nexus.tech', role: 'client', subType: 'Executive', status: 'active', brandCount: 1, lastActive: 'Yesterday' },
-        { id: '4', name: 'Sarah Jones', email: 'sarah@growth.io', role: 'client', subType: 'Assistant', status: 'pending', brandCount: 1, lastActive: 'Never' },
-        { id: '5', name: 'Michael Chen', email: 'm.chen@quantumscale.ai', role: 'qs_team', subType: 'Expert', status: 'active', brandCount: 15, lastActive: 'Now' },
-    ];
+    const supabase = createClient();
+
+    const fetchUsers = async () => {
+        setIsLoading(true);
+        const { data, error } = await supabase
+            .from('allowed_users')
+            .select(`
+                *,
+                brand:brands(name)
+            `)
+            .order('created_at', { ascending: false });
+
+        if (data) {
+            setUsers(data.map(u => ({
+                id: u.id,
+                name: u.full_name || 'Pending Invite',
+                email: u.email,
+                role: u.role === 'qs_team' ? 'qs_team' : 'client',
+                subType: u.role === 'qs_team' ? 'Expert' : (u.role === 'client_executive' ? 'Executive' : 'Assistant'),
+                status: u.full_name ? 'active' : 'pending',
+                brandName: u.brand?.name || 'Global Access',
+                lastActive: 'Never'
+            })));
+        }
+        setIsLoading(false);
+    };
+
+    useEffect(() => {
+        fetchUsers();
+    }, []);
 
     const filteredUsers = users.filter(user => {
         const matchesSearch = user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -50,8 +76,11 @@ export default function UsersPage() {
                     <p className="text-muted-foreground">Manage user permissions, roles, and brand access across the ecosystem.</p>
                 </div>
 
-                <button className="flex items-center gap-2 px-6 py-3 premium-gradient text-white rounded-xl font-bold shadow-xl shadow-primary/20 hover:scale-[1.02] transition-all">
-                    <UserPlus className="w-5 h-5" />
+                <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="flex items-center gap-2 px-6 py-3 premium-gradient text-white rounded-xl font-bold shadow-xl shadow-primary/20 hover:scale-[1.02] transition-all"
+                >
+                    <Plus className="w-5 h-5" />
                     Invite User
                 </button>
             </div>
@@ -96,80 +125,103 @@ export default function UsersPage() {
 
             {/* Users Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <AnimatePresence mode="popLayout">
-                    {filteredUsers.map((user, idx) => (
+                {isLoading ? (
+                    <div className="col-span-full text-center py-20">
                         <motion.div
-                            key={user.id}
-                            layout
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.95 }}
-                            transition={{ duration: 0.2, delay: idx * 0.05 }}
-                            className="glass-card group hover:border-primary/50 transition-all"
+                            animate={{ rotate: 360 }}
+                            transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+                            className="inline-block"
                         >
-                            <div className="p-6">
-                                <div className="flex justify-between items-start mb-6">
-                                    <div className="flex items-center gap-4">
-                                        <div className="relative">
-                                            <div className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center border border-border/50 overflow-hidden">
-                                                <UsersIcon className="w-6 h-6 text-muted-foreground" />
-                                            </div>
-                                            <div className={cn(
-                                                "absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-card",
-                                                user.status === 'active' ? "bg-green-500" : "bg-amber-500"
-                                            )} />
-                                        </div>
-                                        <div>
-                                            <h3 className="font-bold text-lg group-hover:text-primary transition-all">{user.name}</h3>
-                                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                                <Mail className="w-3 h-3" />
-                                                {user.email}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <button className="p-2 text-muted-foreground hover:text-foreground">
-                                        <MoreVertical className="w-4 h-4" />
-                                    </button>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4 mb-6">
-                                    <div className="p-3 bg-secondary/30 rounded-xl border border-border/30">
-                                        <div className="text-[9px] text-muted-foreground uppercase font-bold tracking-widest mb-1">Role</div>
-                                        <div className="flex items-center gap-1.5 font-bold text-xs truncate">
-                                            {user.role === 'qs_team' ? <ShieldCheck className="w-3.5 h-3.5 text-primary" /> : <Briefcase className="w-3.5 h-3.5 text-amber-500" />}
-                                            {user.subType}
-                                        </div>
-                                    </div>
-                                    <div className="p-3 bg-secondary/30 rounded-xl border border-border/30">
-                                        <div className="text-[9px] text-muted-foreground uppercase font-bold tracking-widest mb-1">Brands</div>
-                                        <div className="font-bold text-xs">{user.brandCount} Assigned</div>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center justify-between pt-4 border-t border-border/20">
-                                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">
-                                        <Clock className="w-3 h-3" />
-                                        Last Active: {user.lastActive}
-                                    </div>
-                                    <button className="text-xs font-bold text-primary hover:underline">
-                                        Manage Permissions
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Quick Actions Footer */}
-                            <div className="p-4 bg-secondary/20 border-t border-border/50 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button className="flex-1 py-1.5 bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest rounded-lg hover:bg-primary hover:text-white transition-all">
-                                    Edit User
-                                </button>
-                                <button className="flex-1 py-1.5 bg-secondary/50 text-muted-foreground text-[10px] font-bold uppercase tracking-widest rounded-lg hover:bg-destructive/10 hover:text-destructive transition-all">
-                                    Suspend
-                                </button>
-                            </div>
+                            <UsersIcon className="w-8 h-8 text-primary shadow-primary/20" />
                         </motion.div>
-                    ))}
-                </AnimatePresence>
+                        <p className="text-muted-foreground mt-4 font-bold uppercase tracking-widest text-[10px]">Loading Ecosystem Personnel...</p>
+                    </div>
+                ) : filteredUsers.length === 0 ? (
+                    <div className="col-span-full glass-card p-12 text-center">
+                        <p className="text-muted-foreground">No users found matching your criteria.</p>
+                    </div>
+                ) : (
+                    <AnimatePresence mode="popLayout">
+                        {filteredUsers.map((user, idx) => (
+                            <motion.div
+                                key={user.id}
+                                layout
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.95 }}
+                                transition={{ duration: 0.2, delay: idx * 0.05 }}
+                                className="glass-card group hover:border-primary/50 transition-all"
+                            >
+                                <div className="p-6">
+                                    <div className="flex justify-between items-start mb-6">
+                                        <div className="flex items-center gap-4">
+                                            <div className="relative">
+                                                <div className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center border border-border/50 overflow-hidden">
+                                                    <UsersIcon className="w-6 h-6 text-muted-foreground" />
+                                                </div>
+                                                <div className={cn(
+                                                    "absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-card",
+                                                    user.status === 'active' ? "bg-green-500" : "bg-amber-500"
+                                                )} />
+                                            </div>
+                                            <div>
+                                                <h3 className="font-bold text-lg group-hover:text-primary transition-all">{user.name}</h3>
+                                                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                                    <Mail className="w-3 h-3" />
+                                                    {user.email}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button className="p-2 text-muted-foreground hover:text-foreground">
+                                            <MoreVertical className="w-4 h-4" />
+                                        </button>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4 mb-6">
+                                        <div className="p-3 bg-secondary/30 rounded-xl border border-border/30">
+                                            <div className="text-[9px] text-muted-foreground uppercase font-bold tracking-widest mb-1">Role</div>
+                                            <div className="flex items-center gap-1.5 font-bold text-xs truncate">
+                                                {user.role === 'qs_team' ? <ShieldCheck className="w-3.5 h-3.5 text-primary" /> : <Briefcase className="w-3.5 h-3.5 text-amber-500" />}
+                                                {user.subType}
+                                            </div>
+                                        </div>
+                                        <div className="p-3 bg-secondary/30 rounded-xl border border-border/30">
+                                            <div className="text-[9px] text-muted-foreground uppercase font-bold tracking-widest mb-1">Access Scope</div>
+                                            <div className="font-bold text-xs truncate">{user.brandName}</div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-between pt-4 border-t border-border/20">
+                                        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">
+                                            <Clock className="w-3 h-3" />
+                                            Last Active: {user.lastActive}
+                                        </div>
+                                        <button className="text-xs font-bold text-primary hover:underline">
+                                            Manage Permissions
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Quick Actions Footer */}
+                                <div className="p-4 bg-secondary/20 border-t border-border/50 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button className="flex-1 py-1.5 bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest rounded-lg hover:bg-primary hover:text-white transition-all">
+                                        Edit User
+                                    </button>
+                                    <button className="flex-1 py-1.5 bg-secondary/50 text-muted-foreground text-[10px] font-bold uppercase tracking-widest rounded-lg hover:bg-destructive/10 hover:text-destructive transition-all">
+                                        Suspend
+                                    </button>
+                                </div>
+                            </motion.div>
+                        ))}
+                    </AnimatePresence>
+                )}
             </div>
+
+            <InviteUserModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                onSuccess={fetchUsers}
+            />
 
             {/* Permission Summary Card */}
             <div className="glass-card p-8 border-primary/20 bg-primary/5">

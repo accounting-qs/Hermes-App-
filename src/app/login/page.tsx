@@ -11,11 +11,14 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase-ssr/client";
+
 
 export default function LoginPage() {
+    const supabase = createClient();
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -33,9 +36,10 @@ export default function LoginPage() {
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
-                redirectTo: `${window.location.origin}/dashboard`
+                redirectTo: `${window.location.origin}/auth/callback`
             }
         });
+
 
         if (error) {
             setError(error.message);

@@ -1,7 +1,5 @@
-export type UserRole = 'qs_team' | 'client';
-export type UserSubType = 'Lead Coach' | 'coach' | 'executive' | 'assistant';
-export type BrandPhase = 'foundation' | 'messaging' | 'webinar' | 'launch' | 'running' | 'scaling';
-export type BrandStatus = 'active' | 'onboarding' | 'paused' | 'completed';
+export type UserRole = 'qs_team' | 'client_executive' | 'client_assistant';
+export type BrandStatus = 'onboarding' | 'active' | 'scaling';
 
 export interface User {
   id: string;
@@ -9,8 +7,7 @@ export interface User {
   name: string;
   avatar?: string;
   role: UserRole;
-  subType: UserSubType;
-  brandIds: string[];
+  brandId?: string; // Nullable for QS Team, mandatory for Clients
   status: 'active' | 'inactive';
   createdAt: string;
   updatedAt: string;
@@ -19,29 +16,12 @@ export interface User {
 export interface Brand {
   id: string;
   name: string;
-  companyName: string;
-  website?: string;
   industry: string;
-  description?: string;
-  logo?: string;
   status: BrandStatus;
-  phase: BrandPhase;
-  progress: {
-    overall: number;
-    research: number;
-    offers: number;
-    webinar: number;
-    delivery: number;
-  };
-  team: {
-    coaches: string[];
-    executive?: string;
-    assistant?: string;
-  };
   createdAt: string;
   updatedAt: string;
-  createdBy: string;
 }
+
 
 export interface NavItem {
   title: string;

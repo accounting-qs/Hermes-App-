@@ -18,12 +18,44 @@ import { useBrandStore } from "@/store/useBrandStore";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import { useAuthStore } from "@/store/useAuthStore";
+import { NewBrandModal } from "@/components/modals/NewBrandModal";
+import { createClient } from "@/lib/supabase-ssr/client";
+import { Brand } from "@/types";
+import { Loader2 } from "lucide-react";
 
 export default function BrandsPage() {
-    const { brands, selectBrand } = useBrandStore();
+    const { selectBrand } = useBrandStore();
+    const { user } = useAuthStore();
+    const [brands, setBrands] = useState<Brand[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [view, setView] = useState<'grid' | 'list'>('grid');
     const [searchQuery, setSearchQuery] = useState("");
-    const [activeTab, setActiveTab] = useState<'all' | 'active' | 'onboarding'>('all');
+    const [activeTab, setActiveTab] = useState<'all' | 'active' | 'onboarding' | 'scaling'>('all');
+    const [isModalOpen, setIsModalOpen] = useState(false);
+
+    const supabase = createClient();
+
+    const fetchBrands = async () => {
+        setIsLoading(true);
+        let query = supabase
+            .from('brands')
+            .select('*');
+
+        // RBAC: Client users only see their brand
+        if (user?.role !== 'qs_team' && user?.brandId) {
+            query = query.eq('id', user.brandId);
+        }
+
+        const { data, error } = await query.order('created_at', { ascending: false });
+
+        if (data) setBrands(data);
+        setIsLoading(false);
+    };
+
+    React.useEffect(() => {
+        fetchBrands();
+    }, []);
 
     const filteredBrands = brands.filter(brand => {
         const matchesSearch = brand.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -31,6 +63,7 @@ export default function BrandsPage() {
         const matchesTab = activeTab === 'all' || brand.status === activeTab;
         return matchesSearch && matchesTab;
     });
+
 
     return (
         <div className="space-y-8 pb-12">
@@ -40,10 +73,16 @@ export default function BrandsPage() {
                     <h1 className="text-3xl font-bold outfit-font">Brands</h1>
                     <p className="text-muted-foreground mt-1">Manage and monitor all client brands in one place.</p>
                 </div>
-                <button className="flex items-center justify-center gap-2 px-6 py-3 premium-gradient text-white font-bold rounded-xl shadow-xl shadow-primary/20 hover:scale-[1.02] transition-all">
-                    <Plus className="w-5 h-5" />
-                    <span>New Brand</span>
-                </button>
+                {user?.role === 'qs_team' && (
+                    <button
+                        onClick={() => setIsModalOpen(true)}
+                        className="flex items-center justify-center gap-2 px-6 py-3 premium-gradient text-white font-bold rounded-xl shadow-xl shadow-primary/20 hover:scale-[1.02] transition-all"
+                    >
+                        <Plus className="w-5 h-5" />
+                        <span>New Brand</span>
+                    </button>
+                )}
+
             </div>
 
             {/* Filters & Actions */}
@@ -66,6 +105,12 @@ export default function BrandsPage() {
                         className={cn("px-4 py-1.5 text-xs font-bold rounded-lg transition-all", activeTab === 'onboarding' ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
                     >
                         Onboarding
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('scaling')}
+                        className={cn("px-4 py-1.5 text-xs font-bold rounded-lg transition-all", activeTab === 'scaling' ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+                    >
+                        Scaling
                     </button>
                 </div>
 
@@ -136,30 +181,21 @@ export default function BrandsPage() {
                                         <p className="text-sm text-muted-foreground">{brand.industry}</p>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-4 mb-6">
+                                    <div className="grid grid-cols-1 gap-4 mb-6">
                                         <div className="p-3 bg-secondary/30 rounded-xl border border-border/30">
-                                            <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mb-1">Status</div>
-                                            <div className="text-sm font-bold capitalize">{brand.status}</div>
-                                        </div>
-                                        <div className="p-3 bg-secondary/30 rounded-xl border border-border/30">
-                                            <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mb-1">Phase</div>
-                                            <div className="text-sm font-bold capitalize">{brand.phase}</div>
+                                            <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mb-1">Current Status</div>
+                                            <div className="text-sm font-bold capitalize flex items-center gap-2">
+                                                <div className={cn(
+                                                    "w-2 h-2 rounded-full",
+                                                    brand.status === 'active' ? "bg-green-500" :
+                                                        brand.status === 'scaling' ? "bg-blue-500" : "bg-amber-500"
+                                                )} />
+                                                {brand.status}
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <div className="space-y-4">
-                                        <div className="flex justify-between text-xs font-bold uppercase tracking-widest">
-                                            <span className="text-muted-foreground">Overall Completion</span>
-                                            <span>{brand.progress.overall}%</span>
-                                        </div>
-                                        <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
-                                            <motion.div
-                                                initial={{ width: 0 }}
-                                                animate={{ width: `${brand.progress.overall}%` }}
-                                                className="h-full premium-gradient"
-                                            />
-                                        </div>
-                                    </div>
+
                                 </div>
 
                                 <div className="p-4 bg-secondary/20 border-t border-border/50 flex items-center gap-2">
@@ -191,8 +227,6 @@ export default function BrandsPage() {
                                     <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Brand</th>
                                     <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Industry</th>
                                     <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Status</th>
-                                    <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Phase</th>
-                                    <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Progress</th>
                                     <th className="px-6 py-4 text-right"></th>
                                 </tr>
                             </thead>
@@ -205,23 +239,15 @@ export default function BrandsPage() {
                                                 <div className="font-bold group-hover:text-primary transition-colors">{brand.name}</div>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 text-sm text-muted-foreground">{brand.industry}</td>
+                                        <td className="px-6 py-4 text-sm text-muted-foreground font-medium">{brand.industry}</td>
                                         <td className="px-6 py-4">
                                             <span className={cn(
-                                                "px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest",
-                                                brand.status === 'active' ? "bg-green-500/10 text-green-500" : "bg-blue-500/10 text-blue-500"
-                                            )}>
+                                                "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest",
+                                                brand.status === 'active' ? "bg-green-500/10 text-green-500" :
+                                                    brand.status === 'scaling' ? "bg-blue-500/10 text-blue-500" : "bg-amber-500/10 text-amber-500"
+                                            )}>\
                                                 {brand.status}
                                             </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-sm capitalize">{brand.phase}</td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="h-1.5 w-24 bg-secondary rounded-full overflow-hidden">
-                                                    <div className="h-full premium-gradient" style={{ width: `${brand.progress.overall}%` }} />
-                                                </div>
-                                                <span className="text-xs font-bold">{brand.progress.overall}%</span>
-                                            </div>
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <Link
@@ -239,6 +265,12 @@ export default function BrandsPage() {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            <NewBrandModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                onSuccess={fetchBrands}
+            />
         </div>
     );
 }

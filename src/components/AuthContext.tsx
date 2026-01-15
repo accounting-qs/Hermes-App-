@@ -1,120 +1,164 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase-ssr/client';
+
 import { Session, User as SupabaseUser } from '@supabase/supabase-js';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useRouter } from 'next/navigation';
+import { User, UserRole } from '@/types';
+
 
 interface AuthContextType {
     session: Session | null;
-    user: SupabaseUser | null;
+    user: User | null;
     isLoading: boolean;
     signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Create a single supabase instance for the client
+const supabaseClient = createClient();
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [session, setSession] = useState<Session | null>(null);
-    const [user, setUser] = useState<SupabaseUser | null>(null);
+    const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const { login, logout } = useAuthStore();
     const router = useRouter();
 
     useEffect(() => {
         console.log('AuthContext: Initializing...');
+
+        // Safety timeout to prevent infinite loading state
+        const timeoutId = setTimeout(() => {
+            if (isLoading) {
+                console.warn('AuthContext: Loading timeout reached, forcing isLoading to false');
+                setIsLoading(false);
+            }
+        }, 10000); // 10 seconds timeout
+
         // Get initial session
-        supabase.auth.getSession().then(({ data: { session } }) => {
+        supabaseClient.auth.getSession().then(({ data: { session } }) => {
             console.log('AuthContext: Initial session fetch complete', { hasSession: !!session });
             setSession(session);
-            setUser(session?.user ?? null);
             if (session?.user) {
                 checkWhitelist(session.user);
             } else {
                 console.log('AuthContext: No initial session, setting isLoading false');
+                setUser(null);
                 setIsLoading(false);
             }
         });
 
         // Listen for auth changes
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        const { data: { subscription } } = supabaseClient.auth.onAuthStateChange(async (event, session) => {
             console.log('AuthContext: onAuthStateChange triggered', { event, userId: session?.user?.id });
             setSession(session);
-            setUser(session?.user ?? null);
 
             if (session?.user) {
                 await checkWhitelist(session.user);
             } else {
                 console.log('AuthContext: No user in onAuthStateChange, logging out and setting isLoading false');
                 logout();
+                setUser(null);
                 setIsLoading(false);
             }
         });
 
         return () => {
             console.log('AuthContext: Cleaning up subscription');
+            clearTimeout(timeoutId);
             subscription.unsubscribe();
         };
     }, []);
 
     const checkWhitelist = async (supabaseUser: SupabaseUser) => {
         console.log('AuthContext: Starting whitelist check for', supabaseUser.email);
-        // Prevent redundant checks if we already have this user synced
-        const currentUser = useAuthStore.getState().user;
-        if (currentUser?.id === supabaseUser.id && !isLoading) {
-            console.log('AuthContext: User already synced, skipping whitelist check');
-            setIsLoading(false);
-            return;
-        }
+
+        // Ensure we are in a loading state while checking
+        setIsLoading(true);
 
         try {
             console.log('AuthContext: Querying allowed_users table...');
-            const { data, error } = await supabase
+
+            // Add a timeout wrapper to the query itself
+            const queryPromise = supabaseClient
                 .from('allowed_users')
-                .select('role')
+                .select('role, full_name, brand_id')
                 .eq('email', supabaseUser.email)
                 .single();
 
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Query timeout')), 8000)
+            );
+
+            const { data, error } = await Promise.race([queryPromise, timeoutPromise]) as any;
+
             if (error || !data) {
                 console.warn('AuthContext: Unauthorized - User not whitelisted', error);
-                await supabase.auth.signOut();
-                logout();
-                router.push('/login?error=unauthorized');
-                return;
+
+                // Only redirect if we're sure it's an unauthorized case
+                if (error?.code === 'PGRST116' || !data) {
+                    await supabaseClient.auth.signOut();
+                    logout();
+                    router.push('/unauthorized');
+                    return;
+                }
+
+                // For other errors, we might want to allow them through if it's a technical glitch
+                // but let's be strict for now and redirect to login
+                throw error || new Error('Whitelisting check failed');
             }
 
-            console.log('AuthContext: Whitelist check passed', { role: data.role });
+            console.log('AuthContext: Whitelist check passed', { role: data.role, brand: data.brand_id });
             // Sync with Zustand store
-            login({
+            const hermesUser: User = {
                 id: supabaseUser.id,
                 email: supabaseUser.email!,
-                name: supabaseUser.user_metadata.full_name || supabaseUser.email!.split('@')[0],
+                name: data.full_name || supabaseUser.user_metadata.full_name || supabaseUser.email!.split('@')[0],
                 avatar: supabaseUser.user_metadata.avatar_url,
-                role: 'qs_team',
-                subType: data.role === 'admin' ? 'Lead Coach' : 'coach',
-                brandIds: [],
+                role: (data.role as UserRole) || 'client_executive',
+                brandId: data.brand_id,
                 status: 'active',
                 createdAt: supabaseUser.created_at,
                 updatedAt: new Date().toISOString(),
-            });
+            };
+
+            login(hermesUser);
+            setUser(hermesUser);
+
+            // Automatically select the user's brand if they are a client
+            if (hermesUser.brandId && hermesUser.role.startsWith('client_')) {
+                console.log('AuthContext: Automatically selecting brand:', hermesUser.brandId);
+                const { selectBrand } = (await import('@/store/useBrandStore')).useBrandStore.getState();
+                selectBrand(hermesUser.brandId);
+            }
+
 
         } catch (err) {
-            console.error('AuthContext: Whitelist check technical failure', err);
-            await supabase.auth.signOut();
-            logout();
+            console.error('AuthContext: Whitelist check failure', err);
+            // If it's a timeout or technical failure, we don't necessarily want to 
+            // lock the user out of the login page, but we must stop loading.
+            setIsLoading(false);
+
+            // Optionally redirect to error or login
+            // router.push('/login?error=technical');
         } finally {
             console.log('AuthContext: Whitelist check process finished, setting isLoading false');
             setIsLoading(false);
         }
     };
 
+
     const signOut = async () => {
         console.log('AuthContext: Signing out...');
-        await supabase.auth.signOut();
+        await supabaseClient.auth.signOut();
         logout();
         router.push('/login');
     };
+
 
     return (
         <AuthContext.Provider value={{ session, user, isLoading, signOut }}>

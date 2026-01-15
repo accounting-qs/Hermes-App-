@@ -19,10 +19,12 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import { useAuth } from "@/components/AuthContext";
 
 export default function DashboardPage() {
     const { brands } = useBrandStore();
-    const { user } = useAuthStore();
+    const { user } = useAuth();
+
 
     const stats = [
         { title: "Active Brands", value: brands.length, trend: "+2", isUp: true, icon: Users, color: "bg-emerald-500/10 text-emerald-500" },

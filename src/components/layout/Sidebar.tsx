@@ -44,19 +44,24 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
 
     const globalNav = [
         { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-        { title: "Brands", href: "/brands", icon: Briefcase },
-        { title: "Users", href: "/users", icon: Users },
-        { title: "Analytics", href: "/analytics", icon: BarChart3 },
+        ...(user?.role === 'qs_team' ? [
+            { title: "Brands", href: "/brands", icon: Briefcase },
+            { title: "Users", href: "/users", icon: Users },
+            { title: "Analytics", href: "/analytics", icon: BarChart3 },
+        ] : []),
     ];
 
     const brandNav = selectedBrandId ? [
         { title: "Overview", href: `/brands/${selectedBrandId}`, icon: Search },
         { title: "Resources", href: `/brands/${selectedBrandId}/resources`, icon: FileText },
         { title: "Research", href: `/brands/${selectedBrandId}/research`, icon: Search },
-        { title: "Offers", href: `/brands/${selectedBrandId}/offers`, icon: Target },
+        ...(user?.role !== 'client_assistant' ? [
+            { title: "Offers", href: `/brands/${selectedBrandId}/offers`, icon: Target },
+        ] : []),
         { title: "Webinar", href: `/brands/${selectedBrandId}/webinar`, icon: Video },
         { title: "Workbook", href: `/brands/${selectedBrandId}/workbook`, icon: BookOpen },
     ] : [];
+
 
     const footerNav = [
         { title: "Notifications", href: "/notifications", icon: Bell },
