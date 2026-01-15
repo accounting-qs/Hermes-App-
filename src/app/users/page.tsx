@@ -10,11 +10,15 @@ import {
     ShieldCheck,
     Mail,
     Clock,
-    Briefcase
+    Briefcase,
+    Ban,
+    CheckCircle
 } from "lucide-react";
+import { useToast } from "@/components/ui/ToastContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { InviteUserModal } from "@/components/modals/InviteUserModal";
+import { EditUserModal } from "@/components/modals/EditUserModal";
 import { createClient } from "@/lib/supabase-ssr/client";
 import { Skeleton } from "@/components/ui/Skeleton";
 
@@ -24,6 +28,8 @@ export default function UsersPage() {
     const [users, setUsers] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingUser, setEditingUser] = useState<any | null>(null);
+    const toast = useToast();
 
     const supabase = createClient();
 
@@ -35,7 +41,7 @@ export default function UsersPage() {
             const { data, error } = await supabase
                 .from('allowed_users')
                 .select(`
-                    id, full_name, email, role, created_at,
+                    id, full_name, email, role, status, created_at, brand_id,
                     brand:brands(name)
                 `)
                 .order('created_at', { ascending: false });
@@ -59,7 +65,8 @@ export default function UsersPage() {
                         email: u.email,
                         role: u.role === 'qs_team' ? 'qs_team' : 'client',
                         subType: u.role === 'qs_team' ? 'Expert' : (u.role === 'client_executive' ? 'Executive' : 'Assistant'),
-                        status: u.full_name ? 'active' : 'pending',
+                        status: u.status || (u.full_name ? 'active' : 'pending'), // Use DB status, fallback to logic
+                        brandId: u.brand_id, // Pass brand_id for editing
                         brandName: brandName || 'Global Access',
                         lastActive: 'Never'
                     };
@@ -70,6 +77,25 @@ export default function UsersPage() {
             // Optionally set error state here if UI should show a "Try Again" button
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleSuspend = async (userId: string, currentStatus: string, userName: string) => {
+        const newStatus = currentStatus === 'suspended' ? 'active' : 'suspended';
+
+        try {
+            const { error } = await supabase
+                .from('allowed_users')
+                .update({ status: newStatus })
+                .eq('id', userId);
+
+            if (error) throw error;
+
+            toast.success(`User ${userName} ${newStatus === 'active' ? 'activated' : 'suspended'} successfully`);
+            fetchUsers();
+        } catch (error: any) {
+            console.error("Error updating user status:", error);
+            toast.error("Failed to update user status");
         }
     };
 
@@ -193,7 +219,8 @@ export default function UsersPage() {
                                                 </div>
                                                 <div className={cn(
                                                     "absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-card",
-                                                    user.status === 'active' ? "bg-green-500" : "bg-amber-500"
+                                                    user.status === 'active' ? "bg-green-500" :
+                                                        user.status === 'suspended' ? "bg-destructive" : "bg-amber-500"
                                                 )} />
                                             </div>
                                             <div>
@@ -228,7 +255,10 @@ export default function UsersPage() {
                                             <Clock className="w-3 h-3" />
                                             Last Active: {user.lastActive}
                                         </div>
-                                        <button className="text-xs font-bold text-primary hover:underline">
+                                        <button
+                                            onClick={() => setEditingUser(user)}
+                                            className="text-xs font-bold text-primary hover:underline"
+                                        >
                                             Manage Permissions
                                         </button>
                                     </div>
@@ -236,11 +266,22 @@ export default function UsersPage() {
 
                                 {/* Quick Actions Footer */}
                                 <div className="p-4 bg-secondary/20 border-t border-border/50 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button className="flex-1 py-1.5 bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest rounded-lg hover:bg-primary hover:text-white transition-all">
+                                    <button
+                                        onClick={() => setEditingUser(user)}
+                                        className="flex-1 py-1.5 bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest rounded-lg hover:bg-primary hover:text-white transition-all"
+                                    >
                                         Edit User
                                     </button>
-                                    <button className="flex-1 py-1.5 bg-secondary/50 text-muted-foreground text-[10px] font-bold uppercase tracking-widest rounded-lg hover:bg-destructive/10 hover:text-destructive transition-all">
-                                        Suspend
+                                    <button
+                                        onClick={() => handleSuspend(user.id, user.status, user.name)}
+                                        className={cn(
+                                            "flex-1 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all",
+                                            user.status === 'suspended'
+                                                ? "bg-green-500/10 text-green-500 hover:bg-green-500 hover:text-white"
+                                                : "bg-secondary/50 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                        )}
+                                    >
+                                        {user.status === 'suspended' ? 'Activate' : 'Suspend'}
                                     </button>
                                 </div>
                             </motion.div>
@@ -252,6 +293,13 @@ export default function UsersPage() {
             <InviteUserModal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
+                onSuccess={fetchUsers}
+            />
+
+            <EditUserModal
+                user={editingUser}
+                isOpen={!!editingUser}
+                onClose={() => setEditingUser(null)}
                 onSuccess={fetchUsers}
             />
 

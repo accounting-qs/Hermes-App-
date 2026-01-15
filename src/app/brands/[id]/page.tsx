@@ -31,15 +31,16 @@ export default function BrandOverviewPage() {
 
     const modules = [
         { id: 'resources', title: "Resources", icon: BookOpen, progress: 100, status: 'Complete' },
-        { id: 'research', title: "Research", icon: Search, progress: brand.progress.research, status: brand.progress.research === 100 ? 'Complete' : 'In Progress' },
-        { id: 'offers', title: "Offers", icon: Target, progress: brand.progress.offers, status: brand.progress.offers === 100 ? 'Complete' : 'In Progress' },
-        { id: 'webinar', title: "Webinar", icon: Video, progress: brand.progress.webinar, status: brand.progress.webinar === 100 ? 'Complete' : 'In Progress' },
+        { id: 'research', title: "Research", icon: Search, progress: brand.progress?.research || 0, status: (brand.progress?.research || 0) === 100 ? 'Complete' : 'In Progress' },
+        { id: 'offers', title: "Offers", icon: Target, progress: brand.progress?.offers || 0, status: (brand.progress?.offers || 0) === 100 ? 'Complete' : 'In Progress' },
+        { id: 'webinar', title: "Webinar", icon: Video, progress: brand.progress?.webinar || 0, status: (brand.progress?.webinar || 0) === 100 ? 'Complete' : 'In Progress' },
         { id: 'workbook', title: "Workbook", icon: BookOpen, progress: 0, status: 'Not Started' },
-        { id: 'delivery', title: "Delivery", icon: Truck, progress: brand.progress.delivery, status: 'In Progress' },
+        { id: 'delivery', title: "Delivery", icon: Truck, progress: brand.progress?.delivery || 0, status: 'In Progress' },
     ];
 
     const phases = ['Foundation', 'Messaging', 'Webinar Dev', 'Launch Prep', 'Running', 'Scaling'];
-    const currentPhaseIndex = phases.indexOf(brand.phase.charAt(0).toUpperCase() + brand.phase.slice(1));
+    const brandPhase = brand.phase || 'foundation';
+    const currentPhaseIndex = phases.indexOf(brandPhase.charAt(0).toUpperCase() + brandPhase.slice(1));
 
     return (
         <div className="space-y-8 pb-12">
@@ -75,7 +76,7 @@ export default function BrandOverviewPage() {
                 <div className="lg:col-span-8 glass-card p-8">
                     <div className="flex items-center justify-between mb-8">
                         <h2 className="text-xl font-bold">Program Progress</h2>
-                        <div className="text-sm font-bold text-primary">{brand.progress.overall}% Overall Completion</div>
+                        <div className="text-sm font-bold text-primary">{brand.progress?.overall || 0}% Overall Completion</div>
                     </div>
 
                     {/* Phase Stepper */}

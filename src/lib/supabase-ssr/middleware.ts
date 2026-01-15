@@ -36,9 +36,7 @@ export async function updateSession(request: NextRequest) {
         error: userError
     } = await supabase.auth.getUser()
 
-    console.log('Middleware: Path', pathname, 'User found:', !!user, 'Error:', userError?.message);
-
-    const isPublicRoute = pathname === '/login' || pathname === '/unauthorized' || pathname.startsWith('/auth/callback');
+    console.log('Middleware: Path', pathname, 'User found:', !!user ? 'YES' : 'NO', 'Error:', userError?.message || 'None');
 
     const isProtectedRoute = pathname.startsWith('/dashboard') ||
         pathname.startsWith('/brands') ||
@@ -47,15 +45,24 @@ export async function updateSession(request: NextRequest) {
         pathname.startsWith('/analytics') ||
         pathname.startsWith('/notifications');
 
-    if (!user && isProtectedRoute) {
-        console.log('Middleware: Redirecting to /login (Protected route, no user)');
-        const url = request.nextUrl.clone()
-        url.pathname = '/login'
-        return NextResponse.redirect(url)
+    // 1. Handle Invalid/Stale Sessions Logic
+    if (userError || !user) {
+        // If we are on a protected route and have an error/no user, force clean slate
+        if (isProtectedRoute) {
+            console.log('Middleware: Protected route access denied. Redirecting to login.');
+            const url = request.nextUrl.clone()
+            url.pathname = '/login'
+            // Clear cookies to prevent loops if session is corrupted
+            supabaseResponse.cookies.getAll().forEach(cookie => {
+                supabaseResponse.cookies.delete(cookie.name)
+            });
+            return NextResponse.redirect(url)
+        }
     }
 
+    // 2. Handle Login/Root Redirects for Authenticated Users
     if (user && (pathname === '/login' || pathname === '/')) {
-        console.log('Middleware: Redirecting to /dashboard (At login/root, user exists)');
+        console.log('Middleware: Redirecting authenticated user to /dashboard');
         const url = request.nextUrl.clone()
         url.pathname = '/dashboard'
         return NextResponse.redirect(url)

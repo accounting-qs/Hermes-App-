@@ -24,6 +24,8 @@ import { createClient } from "@/lib/supabase-ssr/client";
 import { Brand } from "@/types";
 import { useRouter } from "next/navigation";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { EditBrandModal } from "@/components/modals/EditBrandModal";
+import { DeleteBrandDialog } from "@/components/modals/DeleteBrandDialog";
 
 // Define FilterState type
 type FilterState = {
@@ -41,6 +43,8 @@ export default function BrandsPage() {
     const [isNewBrandModalOpen, setIsNewBrandModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [activeTab, setActiveTab] = useState<'all' | 'active' | 'onboarding' | 'scaling'>('all');
+    const [editingBrand, setEditingBrand] = useState<Brand | null>(null);
+    const [deletingBrand, setDeletingBrand] = useState<Brand | null>(null);
 
     const supabase = createClient();
     const router = useRouter();
@@ -59,7 +63,17 @@ export default function BrandsPage() {
                 query = query.eq('id', user.brandId);
             }
 
-            const { data, error } = await query.order('name', { ascending: true });
+            const response = await query.order('name', { ascending: true });
+            const { data, error, status, statusText } = response;
+
+            console.log("BrandsPage: Full Supabase Response:", {
+                data,
+                error,
+                status,
+                statusText,
+                userRoleId: user?.role,
+                userBrandId: user?.brandId
+            });
 
             if (error) {
                 console.error("BrandsPage: Supabase error fetching brands:", error);
@@ -229,10 +243,16 @@ export default function BrandsPage() {
                                                 {brand.name[0]}
                                             </div>
                                             <div className="flex items-center gap-1">
-                                                <button className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg transition-all">
+                                                <button
+                                                    onClick={() => setEditingBrand(brand)}
+                                                    className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg transition-all"
+                                                >
                                                     <Edit2 className="w-4 h-4" />
                                                 </button>
-                                                <button className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-all">
+                                                <button
+                                                    onClick={() => setDeletingBrand(brand)}
+                                                    className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-all"
+                                                >
                                                     <Trash2 className="w-4 h-4" />
                                                 </button>
                                             </div>
@@ -332,6 +352,20 @@ export default function BrandsPage() {
             <NewBrandModal
                 isOpen={isNewBrandModalOpen}
                 onClose={() => setIsNewBrandModalOpen(false)}
+                onSuccess={fetchBrands}
+            />
+
+            <EditBrandModal
+                brand={editingBrand}
+                isOpen={!!editingBrand}
+                onClose={() => setEditingBrand(null)}
+                onSuccess={fetchBrands}
+            />
+
+            <DeleteBrandDialog
+                brand={deletingBrand}
+                isOpen={!!deletingBrand}
+                onClose={() => setDeletingBrand(null)}
                 onSuccess={fetchBrands}
             />
         </div>
