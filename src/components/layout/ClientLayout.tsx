@@ -8,26 +8,35 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { useBrandStore } from "@/store/useBrandStore";
 import { usePathname, useRouter } from "next/navigation";
 import { QuantumCopilot } from "@/components/copilot/Copilot";
+import { useAuth } from "@/components/AuthContext";
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
     const { isAuthenticated } = useAuthStore();
+    const { isLoading } = useAuth();
     const [mounted, setMounted] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const router = useRouter();
     const pathname = usePathname();
 
     useEffect(() => {
+        console.log('ClientLayout: Mounted');
         setMounted(true);
     }, []);
 
     useEffect(() => {
-        if (mounted && isAuthenticated && pathname === "/") {
+        console.log('ClientLayout: AuthState Sync', { mounted, isLoading, isAuthenticated, pathname });
+        if (mounted && !isLoading && isAuthenticated && pathname === "/") {
+            console.log('ClientLayout: Redirecting from / to /dashboard');
             router.push("/dashboard");
         }
-    }, [isAuthenticated, pathname, router, mounted]);
+    }, [isAuthenticated, pathname, router, mounted, isLoading]);
 
-    if (!mounted) {
-        return <div className="min-h-screen bg-black" />;
+    if (!mounted || isLoading) {
+        return (
+            <div className="min-h-screen bg-background flex items-center justify-center">
+                <div className="w-10 h-10 border-4 border-primary border-t-transparent animate-spin rounded-full" />
+            </div>
+        );
     }
 
     if (!isAuthenticated) {

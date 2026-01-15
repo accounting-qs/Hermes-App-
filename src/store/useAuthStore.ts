@@ -12,18 +12,8 @@ interface AuthState {
 export const useAuthStore = create<AuthState>()(
     persist(
         (set) => ({
-            user: {
-                id: '1',
-                email: 'coach@quantumscale.ai',
-                name: 'Chris Welker',
-                role: 'qs_team',
-                subType: 'Lead Coach',
-                brandIds: ['brand-1', 'brand-2'],
-                status: 'active',
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-            },
-            isAuthenticated: true, // Default to true for prototype
+            user: null,
+            isAuthenticated: false,
             login: (userData) => {
                 set({
                     user: userData,

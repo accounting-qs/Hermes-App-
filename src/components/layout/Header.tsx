@@ -14,10 +14,12 @@ import { cn } from "@/lib/utils";
 import { useBrandStore } from "@/store/useBrandStore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { motion } from "framer-motion";
+import { useAuth } from "@/components/AuthContext";
 
 export function Header({ setIsSidebarOpen }: { setIsSidebarOpen: (val: boolean) => void }) {
     const { brands, selectedBrandId, selectBrand } = useBrandStore();
-    const { user, logout } = useAuthStore();
+    const { user } = useAuthStore();
+    const { signOut } = useAuth();
 
     const selectedBrand = brands.find(b => b.id === selectedBrandId);
 
@@ -85,7 +87,7 @@ export function Header({ setIsSidebarOpen }: { setIsSidebarOpen: (val: boolean) 
                             </button>
                             <div className="h-px bg-border my-2 mx-1" />
                             <button
-                                onClick={logout}
+                                onClick={signOut}
                                 className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm text-destructive hover:bg-destructive/10 transition-all font-medium"
                             >
                                 <LogOut className="w-4 h-4" />
