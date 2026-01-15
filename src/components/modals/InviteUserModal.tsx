@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, UserPlus, Mail, User, Shield, Briefcase, Loader2, ChevronDown, Check } from "lucide-react";
 import { createClient } from "@/lib/supabase-ssr/client";
 import { UserRole, Brand } from "@/types";
+import { useToast } from "@/components/ui/ToastContext";
 
 interface InviteUserModalProps {
     isOpen: boolean;
@@ -22,7 +23,6 @@ export function InviteUserModal({ isOpen, onClose, onSuccess }: InviteUserModalP
         brandId: "",
         subRole: "client_executive" as UserRole,
     });
-    const [showSuccess, setShowSuccess] = useState(false);
 
     const supabase = createClient();
 
@@ -86,24 +86,28 @@ export function InviteUserModal({ isOpen, onClose, onSuccess }: InviteUserModalP
                 console.warn("InviteUserModal: Profile mirror insert warning (non-critical):", profileError);
             }
 
-            setShowSuccess(true);
+            // SUCCESS FLOW
+            // 1. Immediate notification
+            toast.success(`User ${formData.fullName} invited successfully`);
 
-            setTimeout(() => {
-                onSuccess();
-                onClose();
-                setShowSuccess(false);
-                setFormData({
-                    fullName: "",
-                    email: "",
-                    brandId: "",
-                    subRole: "client_executive",
-                });
-            }, 2000);
+            // 2. Clear Form
+            setFormData({
+                fullName: "",
+                email: "",
+                brandId: "",
+                subRole: "client_executive",
+            });
+
+            // 3. Trigger Refresh
+            onSuccess();
+
+            // 4. Close Modal Immediately
+            onClose();
 
         } catch (error: any) {
             console.error("InviteUserModal: Terminated with error:", error);
 
-            let errorMessage = `Error: ${error.message || "Failed to invite user."}`;
+            let errorMessage = "Failed to invite user.";
 
             if (error?.code === '23505') {
                 errorMessage = "This email address is already on the invitation list.";
@@ -111,7 +115,7 @@ export function InviteUserModal({ isOpen, onClose, onSuccess }: InviteUserModalP
                 errorMessage = "Permission denied. You do not have rights to invite users.";
             }
 
-            alert(errorMessage);
+            toast.error(errorMessage);
 
         } finally {
             setIsLoading(false);
@@ -276,23 +280,16 @@ export function InviteUserModal({ isOpen, onClose, onSuccess }: InviteUserModalP
                                 </button>
                                 <button
                                     type="submit"
-                                    disabled={isLoading || showSuccess}
+                                    disabled={isLoading}
                                     className={cn(
                                         "flex-[2] py-3 px-6 font-bold rounded-xl shadow-xl transition-all flex items-center justify-center gap-2",
-                                        showSuccess
-                                            ? "bg-emerald-500/20 text-emerald-500 border border-emerald-500/50"
-                                            : "premium-gradient text-white shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:scale-100"
+                                        "premium-gradient text-white shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:scale-100"
                                     )}
                                 >
                                     {isLoading ? (
                                         <>
                                             <Loader2 className="w-5 h-5 animate-spin" />
                                             <span>Sending Invitation...</span>
-                                        </>
-                                    ) : showSuccess ? (
-                                        <>
-                                            <Check className="w-5 h-5" />
-                                            <span>User added correctly</span>
                                         </>
                                     ) : (
                                         <>

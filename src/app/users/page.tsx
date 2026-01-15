@@ -16,6 +16,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { InviteUserModal } from "@/components/modals/InviteUserModal";
 import { createClient } from "@/lib/supabase-ssr/client";
+import { Skeleton } from "@/components/ui/Skeleton";
 
 export default function UsersPage() {
     const [activeTab, setActiveTab] = useState<'all' | 'qs_team' | 'clients'>('all');
@@ -30,10 +31,11 @@ export default function UsersPage() {
         setIsLoading(true);
         console.log("UsersPage: Fetching users from allowed_users...");
         try {
+            // Select Only specific columns for performance
             const { data, error } = await supabase
                 .from('allowed_users')
                 .select(`
-                    *,
+                    id, full_name, email, role, created_at,
                     brand:brands(name)
                 `)
                 .order('created_at', { ascending: false });
@@ -45,16 +47,23 @@ export default function UsersPage() {
 
             if (data) {
                 console.log("UsersPage: Succesfully fetched users count:", data.length);
-                setUsers(data.map(u => ({
-                    id: u.id,
-                    name: u.full_name || 'Pending Invite',
-                    email: u.email,
-                    role: u.role === 'qs_team' ? 'qs_team' : 'client',
-                    subType: u.role === 'qs_team' ? 'Expert' : (u.role === 'client_executive' ? 'Executive' : 'Assistant'),
-                    status: u.full_name ? 'active' : 'pending',
-                    brandName: u.brand?.name || 'Global Access',
-                    lastActive: 'Never'
-                })));
+                setUsers(data.map((u: any) => {
+                    // Handle distinct brand join cases (single object or single-element array)
+                    const brandName = Array.isArray(u.brand)
+                        ? u.brand[0]?.name
+                        : u.brand?.name;
+
+                    return {
+                        id: u.id,
+                        name: u.full_name || 'Pending Invite',
+                        email: u.email,
+                        role: u.role === 'qs_team' ? 'qs_team' : 'client',
+                        subType: u.role === 'qs_team' ? 'Expert' : (u.role === 'client_executive' ? 'Executive' : 'Assistant'),
+                        status: u.full_name ? 'active' : 'pending',
+                        brandName: brandName || 'Global Access',
+                        lastActive: 'Never'
+                    };
+                }));
             }
         } catch (err) {
             console.error("UsersPage: Technical failure in fetchUsers:", err);
@@ -139,16 +148,26 @@ export default function UsersPage() {
             {/* Users Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {isLoading ? (
-                    <div className="col-span-full text-center py-20">
-                        <motion.div
-                            animate={{ rotate: 360 }}
-                            transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-                            className="inline-block"
-                        >
-                            <UsersIcon className="w-8 h-8 text-primary shadow-primary/20" />
-                        </motion.div>
-                        <p className="text-muted-foreground mt-4 font-bold uppercase tracking-widest text-[10px]">Loading Ecosystem Personnel...</p>
-                    </div>
+                    <>
+                        {[1, 2, 3, 4, 5, 6].map((i) => (
+                            <div key={i} className="glass-card p-6 border-primary/20 min-h-[220px] flex flex-col gap-4">
+                                <div className="flex justify-between items-start">
+                                    <div className="flex gap-4">
+                                        <Skeleton className="w-14 h-14 rounded-2xl" />
+                                        <div className="space-y-2">
+                                            <Skeleton className="h-5 w-32" />
+                                            <Skeleton className="h-3 w-40" />
+                                        </div>
+                                    </div>
+                                    <Skeleton className="w-6 h-6 rounded-lg" />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 mt-2">
+                                    <Skeleton className="h-12 rounded-xl" />
+                                    <Skeleton className="h-12 rounded-xl" />
+                                </div>
+                            </div>
+                        ))}
+                    </>
                 ) : filteredUsers.length === 0 ? (
                     <div className="col-span-full glass-card p-12 text-center">
                         <p className="text-muted-foreground">No users found matching your criteria.</p>

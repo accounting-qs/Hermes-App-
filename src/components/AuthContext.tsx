@@ -75,14 +75,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const checkWhitelist = async (supabaseUser: SupabaseUser, retryCount = 0) => {
-        console.log(`AuthContext: Starting whitelist check for ${supabaseUser.email} (Attempt ${retryCount + 1})`);
+        const isInitialLoad = isLoading && !user;
+        console.log(`AuthContext: Starting whitelist check for ${supabaseUser.email} (Attempt ${retryCount + 1}) [isInitialLoad: ${isInitialLoad}]`);
 
-        // Ensure we are in a loading state while checking
-        setIsLoading(true);
+        // Only block UI if this is the initial load or we don't have a user yet
+        if (isInitialLoad) {
+            setIsLoading(true);
+        }
 
         try {
+            // Optimistic check: if we already have a user and IDs match, don't query DB unless forced
+            if (user?.id === supabaseUser.id && !isInitialLoad) {
+                console.log('AuthContext: Skipping DB check - User already loaded and requires no update.');
+                return;
+            }
+
             console.time(`WhitelistQuery-${supabaseUser.id}`);
-            console.log(`AuthContext: Querying allowed_users for email: [${supabaseUser.email}]`);
+            // ... (rest of the query logic remains the same)
 
             const { data, error } = await supabaseClient
                 .from('allowed_users')
@@ -93,13 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             console.timeEnd(`WhitelistQuery-${supabaseUser.id}`);
 
             if (error || !data) {
-                console.error('AuthContext: Whitelist query failed or returned no data', {
-                    error,
-                    errorCode: error?.code,
-                    email: supabaseUser.email
-                });
-
-                // If it's a transient failure and we have retries left, try again
+                // ... (error handling)
                 if (retryCount < 1 && (!error || (error.code !== 'PGRST116' && error.code !== '42501'))) {
                     console.log('AuthContext: Retrying whitelist check due to potential transient failure...');
                     return checkWhitelist(supabaseUser, retryCount + 1);
@@ -113,13 +116,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     router.push('/unauthorized');
                     return;
                 }
-
                 throw error || new Error('Whitelisting check failed');
             }
 
-
             console.log('AuthContext: Whitelist check passed', { role: data.role, brand: data.brand_id });
-            // Sync with Zustand store
+
             const hermesUser: User = {
                 id: supabaseUser.id,
                 email: supabaseUser.email!,
@@ -132,28 +133,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 updatedAt: new Date().toISOString(),
             };
 
-            login(hermesUser);
-            setUser(hermesUser);
+            // Only update state if data actually changed to avoid re-renders
+            if (JSON.stringify(hermesUser) !== JSON.stringify(user)) {
+                login(hermesUser);
+                setUser(hermesUser);
 
-            // Automatically select the user's brand if they are a client
-            if (hermesUser.brandId && hermesUser.role.startsWith('client_')) {
-                console.log('AuthContext: Automatically selecting brand:', hermesUser.brandId);
-                const { selectBrand } = (await import('@/store/useBrandStore')).useBrandStore.getState();
-                selectBrand(hermesUser.brandId);
+                if (hermesUser.brandId && hermesUser.role.startsWith('client_')) {
+                    console.log('AuthContext: Automatically selecting brand:', hermesUser.brandId);
+                    const { selectBrand } = (await import('@/store/useBrandStore')).useBrandStore.getState();
+                    selectBrand(hermesUser.brandId);
+                }
             }
-
 
         } catch (err) {
             console.error('AuthContext: Whitelist check failure', err);
-            // If it's a timeout or technical failure, we don't necessarily want to 
-            // lock the user out of the login page, but we must stop loading.
-            setIsLoading(false);
-
-            // Optionally redirect to error or login
-            // router.push('/login?error=technical');
+            // Only stop loading if we were loading
+            if (isInitialLoad) setIsLoading(false);
         } finally {
-            console.log('AuthContext: Whitelist check process finished, setting isLoading false');
-            setIsLoading(false);
+            if (isInitialLoad) {
+                console.log('AuthContext: Initial whitelist check finished, releasing loader');
+                setIsLoading(false);
+            }
         }
     };
 

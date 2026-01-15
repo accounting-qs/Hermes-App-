@@ -10,6 +10,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { QuantumCopilot } from "@/components/copilot/Copilot";
 import { useAuth } from "@/components/AuthContext";
 import { createClient } from "@/lib/supabase-ssr/client";
+import { ToastProvider } from "@/components/ui/ToastContext";
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
     const { isAuthenticated } = useAuthStore();
@@ -73,33 +74,35 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
 
 
     return (
-        <div className="flex h-screen overflow-hidden bg-background text-foreground transition-colors duration-300">
-            {/* Sidebar with dynamic width */}
-            <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
+        <ToastProvider>
+            <div className="flex h-screen overflow-hidden bg-background text-foreground transition-colors duration-300">
+                {/* Sidebar with dynamic width */}
+                <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
 
-            <div className="relative flex flex-col flex-1 overflow-hidden">
-                {/* Slim Header */}
-                <Header setIsSidebarOpen={setIsSidebarOpen} />
+                <div className="relative flex flex-col flex-1 overflow-hidden">
+                    {/* Slim Header */}
+                    <Header setIsSidebarOpen={setIsSidebarOpen} />
 
-                {/* Main Content Area */}
-                <main className="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth">
-                    <AnimatePresence mode="wait">
-                        <motion.div
-                            key={pathname}
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: 10 }}
-                            transition={{ duration: 0.2, ease: "easeInOut" }}
-                            className="min-h-full"
-                        >
-                            {children}
-                        </motion.div>
-                    </AnimatePresence>
-                </main>
+                    {/* Main Content Area */}
+                    <main className="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth">
+                        <AnimatePresence mode="wait">
+                            <motion.div
+                                key={pathname}
+                                initial={{ opacity: 0, x: -10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: 10 }}
+                                transition={{ duration: 0.2, ease: "easeInOut" }}
+                                className="min-h-full"
+                            >
+                                {children}
+                            </motion.div>
+                        </AnimatePresence>
+                    </main>
 
-                {/* Floating Copilot Button */}
-                <QuantumCopilot />
+                    {/* Floating Copilot Button */}
+                    <QuantumCopilot />
+                </div>
             </div>
-        </div>
+        </ToastProvider>
     );
 }

@@ -22,7 +22,15 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { NewBrandModal } from "@/components/modals/NewBrandModal";
 import { createClient } from "@/lib/supabase-ssr/client";
 import { Brand } from "@/types";
-import { Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Skeleton } from "@/components/ui/Skeleton";
+
+// Define FilterState type
+type FilterState = {
+    status: 'all' | 'active' | 'onboarding' | 'scaling';
+    industry: 'all' | string;
+    sortBy: 'name' | 'created_at';
+};
 
 export default function BrandsPage() {
     const { selectBrand } = useBrandStore();
@@ -30,19 +38,21 @@ export default function BrandsPage() {
     const [brands, setBrands] = useState<Brand[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [view, setView] = useState<'grid' | 'list'>('grid');
-    const [searchQuery, setSearchQuery] = useState("");
+    const [isNewBrandModalOpen, setIsNewBrandModalOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState("");
     const [activeTab, setActiveTab] = useState<'all' | 'active' | 'onboarding' | 'scaling'>('all');
-    const [isModalOpen, setIsModalOpen] = useState(false);
 
     const supabase = createClient();
+    const router = useRouter();
 
     const fetchBrands = async () => {
         setIsLoading(true);
         console.log("BrandsPage: Fetching brands...");
         try {
+            // Optimize: Select only needed fields
             let query = supabase
                 .from('brands')
-                .select('*');
+                .select('id, name, industry, status, website, logo_url, phase, created_at, updated_at');
 
             // RBAC: Client users only see their brand
             if (user?.role !== 'qs_team' && user?.brandId) {
@@ -58,7 +68,19 @@ export default function BrandsPage() {
 
             if (data) {
                 console.log("BrandsPage: Successfully fetched brands count:", data.length);
-                setBrands(data);
+                const mappedBrands: Brand[] = data.map((b: any) => ({
+                    id: b.id,
+                    name: b.name,
+                    industry: b.industry,
+                    status: b.status,
+                    phase: b.phase,
+                    createdAt: b.created_at,
+                    updatedAt: b.updated_at,
+                    progress: { overall: 0 }, // Default progress as it is not in the DB yet
+                    // detailed progress, website, logoUrl etc are partials or not in Brand interface yet?
+                    // The Brand interface in types/index.ts only has the above fields.
+                }));
+                setBrands(mappedBrands);
             }
         } catch (err) {
             console.error("BrandsPage: Technical failure in fetchBrands:", err);
@@ -72,8 +94,8 @@ export default function BrandsPage() {
     }, []);
 
     const filteredBrands = brands.filter(brand => {
-        const matchesSearch = brand.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            brand.industry.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesSearch = brand.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            brand.industry.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesTab = activeTab === 'all' || brand.status === activeTab;
         return matchesSearch && matchesTab;
     });
@@ -89,7 +111,7 @@ export default function BrandsPage() {
                 </div>
                 {user?.role === 'qs_team' && (
                     <button
-                        onClick={() => setIsModalOpen(true)}
+                        onClick={() => setIsNewBrandModalOpen(true)}
                         className="flex items-center justify-center gap-2 px-6 py-3 premium-gradient text-white font-bold rounded-xl shadow-xl shadow-primary/20 hover:scale-[1.02] transition-all"
                     >
                         <Plus className="w-5 h-5" />
@@ -134,8 +156,8 @@ export default function BrandsPage() {
                         <input
                             type="text"
                             placeholder="Search by name or industry..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
                             className="w-full bg-secondary/50 border border-border/50 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                         />
                     </div>
@@ -159,15 +181,29 @@ export default function BrandsPage() {
 
             {/* Content */}
             {isLoading ? (
-                <div className="col-span-full text-center py-20">
-                    <motion.div
-                        animate={{ rotate: 360 }}
-                        transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-                        className="inline-block"
-                    >
-                        <Loader2 className="w-8 h-8 text-primary" />
-                    </motion.div>
-                    <p className="text-muted-foreground mt-4 font-bold uppercase tracking-widest text-[10px]">Loading Ecosystem Brands...</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                        <div key={i} className="glass-card p-6 border-primary/20 h-[280px] flex flex-col gap-4">
+                            <div className="flex justify-between items-start">
+                                <div className="flex gap-4">
+                                    <Skeleton className="w-12 h-12 rounded-xl" />
+                                    <div className="space-y-2">
+                                        <Skeleton className="h-5 w-32" />
+                                        <Skeleton className="h-3 w-24" />
+                                    </div>
+                                </div>
+                                <Skeleton className="w-8 h-8 rounded-lg" />
+                            </div>
+                            <div className="mt-4 space-y-3">
+                                <Skeleton className="h-2 w-full" />
+                                <Skeleton className="h-2 w-2/3" />
+                            </div>
+                            <div className="mt-auto pt-4 flex justify-between items-center">
+                                <Skeleton className="h-6 w-20 rounded-full" />
+                                <Skeleton className="h-8 w-24 rounded-lg" />
+                            </div>
+                        </div>
+                    ))}
                 </div>
             ) : (
                 <AnimatePresence mode="wait">
@@ -271,7 +307,7 @@ export default function BrandsPage() {
                                                     "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest",
                                                     brand.status === 'active' ? "bg-green-500/10 text-green-500" :
                                                         brand.status === 'scaling' ? "bg-blue-500/10 text-blue-500" : "bg-amber-500/10 text-amber-500"
-                                                )}>\
+                                                )}>
                                                     {brand.status}
                                                 </span>
                                             </td>
@@ -294,8 +330,8 @@ export default function BrandsPage() {
             )}
 
             <NewBrandModal
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
+                isOpen={isNewBrandModalOpen}
+                onClose={() => setIsNewBrandModalOpen(false)}
                 onSuccess={fetchBrands}
             />
         </div>

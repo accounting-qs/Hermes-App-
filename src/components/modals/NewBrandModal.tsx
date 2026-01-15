@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Plus, Building2, Globe, Tag, Loader2, Check } from "lucide-react";
 import { createClient } from "@/lib/supabase-ssr/client";
+import { useToast } from "@/components/ui/ToastContext";
 import { BrandStatus } from "@/types";
 
 interface NewBrandModalProps {
@@ -17,73 +18,66 @@ export function NewBrandModal({ isOpen, onClose, onSuccess }: NewBrandModalProps
     const [formData, setFormData] = useState({
         name: "",
         industry: "",
-        status: "onboarding" as BrandStatus,
+        website: "", // Added website
+        logoUrl: "", // Added logoUrl
     });
-    const [showSuccess, setShowSuccess] = useState(false);
+    const [selectedStatus, setSelectedStatus] = useState<BrandStatus>('onboarding'); // Manage status separately
 
     const supabase = createClient();
+    const toast = useToast(); // Corrected usage
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
 
-        const payload = {
-            name: formData.name,
-            industry: formData.industry,
-            status: formData.status
-        };
-
-        console.log("NewBrandModal: Creating brand...", payload);
-
         try {
-            // Race between Supabase insert and a 12-second timeout
-            const insertPromise = supabase
-                .from('brands')
-                .insert([payload])
-                .select();
+            const { data, error } = await Promise.race([
+                supabase
+                    .from('brands')
+                    .insert([{
+                        name: formData.name,
+                        industry: formData.industry,
+                        website: formData.website,
+                        logo_url: formData.logoUrl, // Note: Make sure database uses 'logo_url' snake_case if that's the column name
+                        status: 'onboarding',
+                        phase: 'foundation'
+                    }])
+                    .select()
+                    .single(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 15000))
+            ]) as any; // Cast to avoid complex Promise race types
 
-            const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error("Request timed out. Please check your connection.")), 12000)
-            );
+            if (error) throw error;
 
-            const { data, error } = await Promise.race([insertPromise, timeoutPromise]) as any;
+            toast.success(`Brand "${formData.name}" created successfully`);
 
-            if (error) {
-                console.error("NewBrandModal: Supabase insertion error:", error);
-                throw error;
-            }
-
-            console.log("NewBrandModal: Brand created successfully!", data);
-
-            // Show success feedback
-            setShowSuccess(true);
-
-            // Wait 2 seconds, then complete
-            setTimeout(() => {
-                onSuccess();
-                onClose();
-                setShowSuccess(false);
-                // Reset form
-                setFormData({
-                    name: "",
-                    industry: "",
-                    status: "onboarding",
-                });
-            }, 2000);
-
-        } catch (error: any) {
-            console.error("NewBrandModal: Detailed error context:", {
-                message: error.message,
-                code: error.code,
-                details: error.details,
-                hint: error.hint
+            // Clear form
+            setFormData({
+                name: "",
+                industry: "",
+                website: "",
+                logoUrl: ""
             });
 
-            const errorMessage = error.code === '42501'
-                ? "Permission denied. You must be a QS Team member to create brands."
-                : `Error: ${error.message || "Failed to create brand."}`;
+            // Trigger refresh
+            onSuccess();
 
-            alert(errorMessage);
+            // Close immediately
+            onClose();
+
+        } catch (error: any) {
+            console.error("NewBrandModal: Error creating brand:", error);
+
+            let message = "Failed to create brand";
+            if (error.message === 'Timeout') {
+                message = "Request timed out. The brand might have been created - please refresh checking.";
+            } else if (error.code === '42501') {
+                message = "Permission denied. You must be a QS Team member to create brands.";
+            } else {
+                message = `Error: ${error.message || "Failed to create brand."}`;
+            }
+
+            toast.error(message);
         } finally {
             setIsLoading(false);
         }
@@ -191,23 +185,16 @@ export function NewBrandModal({ isOpen, onClose, onSuccess }: NewBrandModalProps
                                 </button>
                                 <button
                                     type="submit"
-                                    disabled={isLoading || showSuccess}
+                                    disabled={isLoading}
                                     className={cn(
                                         "flex-[2] py-3 px-6 font-bold rounded-xl shadow-xl transition-all flex items-center justify-center gap-2",
-                                        showSuccess
-                                            ? "bg-emerald-500/20 text-emerald-500 border border-emerald-500/50"
-                                            : "premium-gradient text-white shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:scale-100"
+                                        "premium-gradient text-white shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:scale-100"
                                     )}
                                 >
                                     {isLoading ? (
                                         <>
                                             <Loader2 className="w-5 h-5 animate-spin" />
                                             <span>Initializing Brand...</span>
-                                        </>
-                                    ) : showSuccess ? (
-                                        <>
-                                            <Check className="w-5 h-5" />
-                                            <span>Brand added correctly</span>
                                         </>
                                     ) : (
                                         <>
