@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Plus, Building2, Globe, Tag, Loader2 } from "lucide-react";
+import { X, Plus, Building2, Globe, Tag, Loader2, Check } from "lucide-react";
 import { createClient } from "@/lib/supabase-ssr/client";
 import { BrandStatus } from "@/types";
 
@@ -19,6 +19,7 @@ export function NewBrandModal({ isOpen, onClose, onSuccess }: NewBrandModalProps
         industry: "",
         status: "onboarding" as BrandStatus,
     });
+    const [showSuccess, setShowSuccess] = useState(false);
 
     const supabase = createClient();
 
@@ -26,25 +27,68 @@ export function NewBrandModal({ isOpen, onClose, onSuccess }: NewBrandModalProps
         e.preventDefault();
         setIsLoading(true);
 
-        try {
-            const { error } = await supabase
-                .from('brands')
-                .insert([{
-                    name: formData.name,
-                    industry: formData.industry,
-                    status: formData.status
-                }]);
+        const payload = {
+            name: formData.name,
+            industry: formData.industry,
+            status: formData.status
+        };
 
-            if (error) throw error;
-            onSuccess();
-            onClose();
-        } catch (error) {
-            console.error("Error creating brand:", error);
-            alert("Failed to create brand. Please try again.");
+        console.log("NewBrandModal: Creating brand...", payload);
+
+        try {
+            // Race between Supabase insert and a 12-second timeout
+            const insertPromise = supabase
+                .from('brands')
+                .insert([payload])
+                .select();
+
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("Request timed out. Please check your connection.")), 12000)
+            );
+
+            const { data, error } = await Promise.race([insertPromise, timeoutPromise]) as any;
+
+            if (error) {
+                console.error("NewBrandModal: Supabase insertion error:", error);
+                throw error;
+            }
+
+            console.log("NewBrandModal: Brand created successfully!", data);
+
+            // Show success feedback
+            setShowSuccess(true);
+
+            // Wait 2 seconds, then complete
+            setTimeout(() => {
+                onSuccess();
+                onClose();
+                setShowSuccess(false);
+                // Reset form
+                setFormData({
+                    name: "",
+                    industry: "",
+                    status: "onboarding",
+                });
+            }, 2000);
+
+        } catch (error: any) {
+            console.error("NewBrandModal: Detailed error context:", {
+                message: error.message,
+                code: error.code,
+                details: error.details,
+                hint: error.hint
+            });
+
+            const errorMessage = error.code === '42501'
+                ? "Permission denied. You must be a QS Team member to create brands."
+                : `Error: ${error.message || "Failed to create brand."}`;
+
+            alert(errorMessage);
         } finally {
             setIsLoading(false);
         }
     };
+
 
     return (
         <AnimatePresence>
@@ -147,13 +191,23 @@ export function NewBrandModal({ isOpen, onClose, onSuccess }: NewBrandModalProps
                                 </button>
                                 <button
                                     type="submit"
-                                    disabled={isLoading}
-                                    className="flex-[2] py-3 px-6 premium-gradient text-white font-bold rounded-xl shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-2"
+                                    disabled={isLoading || showSuccess}
+                                    className={cn(
+                                        "flex-[2] py-3 px-6 font-bold rounded-xl shadow-xl transition-all flex items-center justify-center gap-2",
+                                        showSuccess
+                                            ? "bg-emerald-500/20 text-emerald-500 border border-emerald-500/50"
+                                            : "premium-gradient text-white shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:scale-100"
+                                    )}
                                 >
                                     {isLoading ? (
                                         <>
                                             <Loader2 className="w-5 h-5 animate-spin" />
                                             <span>Initializing Brand...</span>
+                                        </>
+                                    ) : showSuccess ? (
+                                        <>
+                                            <Check className="w-5 h-5" />
+                                            <span>Brand added correctly</span>
                                         </>
                                     ) : (
                                         <>

@@ -28,27 +28,40 @@ export default function UsersPage() {
 
     const fetchUsers = async () => {
         setIsLoading(true);
-        const { data, error } = await supabase
-            .from('allowed_users')
-            .select(`
-                *,
-                brand:brands(name)
-            `)
-            .order('created_at', { ascending: false });
+        console.log("UsersPage: Fetching users from allowed_users...");
+        try {
+            const { data, error } = await supabase
+                .from('allowed_users')
+                .select(`
+                    *,
+                    brand:brands(name)
+                `)
+                .order('created_at', { ascending: false });
 
-        if (data) {
-            setUsers(data.map(u => ({
-                id: u.id,
-                name: u.full_name || 'Pending Invite',
-                email: u.email,
-                role: u.role === 'qs_team' ? 'qs_team' : 'client',
-                subType: u.role === 'qs_team' ? 'Expert' : (u.role === 'client_executive' ? 'Executive' : 'Assistant'),
-                status: u.full_name ? 'active' : 'pending',
-                brandName: u.brand?.name || 'Global Access',
-                lastActive: 'Never'
-            })));
+            if (error) {
+                console.error("UsersPage: Supabase error fetching users:", error);
+                throw error;
+            }
+
+            if (data) {
+                console.log("UsersPage: Succesfully fetched users count:", data.length);
+                setUsers(data.map(u => ({
+                    id: u.id,
+                    name: u.full_name || 'Pending Invite',
+                    email: u.email,
+                    role: u.role === 'qs_team' ? 'qs_team' : 'client',
+                    subType: u.role === 'qs_team' ? 'Expert' : (u.role === 'client_executive' ? 'Executive' : 'Assistant'),
+                    status: u.full_name ? 'active' : 'pending',
+                    brandName: u.brand?.name || 'Global Access',
+                    lastActive: 'Never'
+                })));
+            }
+        } catch (err) {
+            console.error("UsersPage: Technical failure in fetchUsers:", err);
+            // Optionally set error state here if UI should show a "Try Again" button
+        } finally {
+            setIsLoading(false);
         }
-        setIsLoading(false);
     };
 
     useEffect(() => {

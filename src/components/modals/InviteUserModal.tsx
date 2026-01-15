@@ -22,6 +22,7 @@ export function InviteUserModal({ isOpen, onClose, onSuccess }: InviteUserModalP
         brandId: "",
         subRole: "client_executive" as UserRole,
     });
+    const [showSuccess, setShowSuccess] = useState(false);
 
     const supabase = createClient();
 
@@ -32,38 +33,91 @@ export function InviteUserModal({ isOpen, onClose, onSuccess }: InviteUserModalP
     }, [isOpen]);
 
     const fetchBrands = async () => {
-        const { data } = await supabase.from('brands').select('*').order('name');
-        if (data) setBrands(data);
+        const { data, error } = await supabase.from('brands').select('*').order('name');
+
+        if (error) {
+            console.error("InviteUserModal: Error fetching brands:", error);
+            return;
+        }
+
+        if (data) {
+            setBrands(data);
+        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
 
-        try {
-            const finalRole = primaryRole === 'qs_team'
-                ? 'qs_team'
-                : formData.subRole;
+        const finalRole = primaryRole === 'qs_team'
+            ? 'qs_team'
+            : formData.subRole;
 
+        const payload = {
+            email: formData.email,
+            full_name: formData.fullName,
+            role: finalRole as string,
+            brand_id: primaryRole === 'client' ? formData.brandId : null
+        };
+
+        try {
+            // 1. Insert into 'allowed_users' (Primary Authority)
             const { error } = await supabase
                 .from('allowed_users')
+                .insert([payload])
+                .select();
+
+            if (error) {
+                console.error("InviteUserModal: Error inviting user:", JSON.stringify(error, null, 2));
+                throw error;
+            }
+
+            // 2. Insert into 'profiles' (Secondary/Mirror)
+            const { error: profileError } = await supabase
+                .from('profiles')
                 .insert([{
-                    email: formData.email,
-                    full_name: formData.fullName,
-                    role: finalRole as string,
-                    brand_id: primaryRole === 'client' ? formData.brandId : null
+                    email: payload.email,
+                    full_name: payload.full_name,
+                    role: payload.role,
+                    brand_id: payload.brand_id
                 }]);
 
-            if (error) throw error;
-            onSuccess();
-            onClose();
-        } catch (error) {
-            console.error("Error inviting user:", error);
-            alert("Failed to invite user. Please try again.");
+            if (profileError) {
+                console.warn("InviteUserModal: Profile mirror insert warning (non-critical):", profileError);
+            }
+
+            setShowSuccess(true);
+
+            setTimeout(() => {
+                onSuccess();
+                onClose();
+                setShowSuccess(false);
+                setFormData({
+                    fullName: "",
+                    email: "",
+                    brandId: "",
+                    subRole: "client_executive",
+                });
+            }, 2000);
+
+        } catch (error: any) {
+            console.error("InviteUserModal: Terminated with error:", error);
+
+            let errorMessage = `Error: ${error.message || "Failed to invite user."}`;
+
+            if (error?.code === '23505') {
+                errorMessage = "This email address is already on the invitation list.";
+            } else if (error?.code === '42501') {
+                errorMessage = "Permission denied. You do not have rights to invite users.";
+            }
+
+            alert(errorMessage);
+
         } finally {
             setIsLoading(false);
         }
     };
+
 
     return (
         <AnimatePresence>
@@ -222,13 +276,23 @@ export function InviteUserModal({ isOpen, onClose, onSuccess }: InviteUserModalP
                                 </button>
                                 <button
                                     type="submit"
-                                    disabled={isLoading}
-                                    className="flex-[2] py-3 px-6 premium-gradient text-white font-bold rounded-xl shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-2"
+                                    disabled={isLoading || showSuccess}
+                                    className={cn(
+                                        "flex-[2] py-3 px-6 font-bold rounded-xl shadow-xl transition-all flex items-center justify-center gap-2",
+                                        showSuccess
+                                            ? "bg-emerald-500/20 text-emerald-500 border border-emerald-500/50"
+                                            : "premium-gradient text-white shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:scale-100"
+                                    )}
                                 >
                                     {isLoading ? (
                                         <>
                                             <Loader2 className="w-5 h-5 animate-spin" />
                                             <span>Sending Invitation...</span>
+                                        </>
+                                    ) : showSuccess ? (
+                                        <>
+                                            <Check className="w-5 h-5" />
+                                            <span>User added correctly</span>
                                         </>
                                     ) : (
                                         <>

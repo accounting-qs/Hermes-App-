@@ -34,10 +34,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Safety timeout to prevent infinite loading state
         const timeoutId = setTimeout(() => {
             if (isLoading) {
-                console.warn('AuthContext: Loading timeout reached, forcing isLoading to false');
+                console.warn('AuthContext: Global loading timeout reached (25s), forcing isLoading to false');
                 setIsLoading(false);
             }
-        }, 10000); // 10 seconds timeout
+        }, 25000); // 25 seconds timeout
 
         // Get initial session
         supabaseClient.auth.getSession().then(({ data: { session } }) => {
@@ -74,32 +74,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
     }, []);
 
-    const checkWhitelist = async (supabaseUser: SupabaseUser) => {
-        console.log('AuthContext: Starting whitelist check for', supabaseUser.email);
+    const checkWhitelist = async (supabaseUser: SupabaseUser, retryCount = 0) => {
+        console.log(`AuthContext: Starting whitelist check for ${supabaseUser.email} (Attempt ${retryCount + 1})`);
 
         // Ensure we are in a loading state while checking
         setIsLoading(true);
 
         try {
-            console.log('AuthContext: Querying allowed_users table...');
+            console.time(`WhitelistQuery-${supabaseUser.id}`);
+            console.log(`AuthContext: Querying allowed_users for email: [${supabaseUser.email}]`);
 
-            // Add a timeout wrapper to the query itself
-            const queryPromise = supabaseClient
+            const { data, error } = await supabaseClient
                 .from('allowed_users')
                 .select('role, full_name, brand_id')
                 .eq('email', supabaseUser.email)
                 .single();
 
-            const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('Query timeout')), 8000)
-            );
-
-            const { data, error } = await Promise.race([queryPromise, timeoutPromise]) as any;
+            console.timeEnd(`WhitelistQuery-${supabaseUser.id}`);
 
             if (error || !data) {
+                console.error('AuthContext: Whitelist query failed or returned no data', {
+                    error,
+                    errorCode: error?.code,
+                    email: supabaseUser.email
+                });
+
+                // If it's a transient failure and we have retries left, try again
+                if (retryCount < 1 && (!error || (error.code !== 'PGRST116' && error.code !== '42501'))) {
+                    console.log('AuthContext: Retrying whitelist check due to potential transient failure...');
+                    return checkWhitelist(supabaseUser, retryCount + 1);
+                }
+
                 console.warn('AuthContext: Unauthorized - User not whitelisted', error);
 
-                // Only redirect if we're sure it's an unauthorized case
                 if (error?.code === 'PGRST116' || !data) {
                     await supabaseClient.auth.signOut();
                     logout();
@@ -107,10 +114,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     return;
                 }
 
-                // For other errors, we might want to allow them through if it's a technical glitch
-                // but let's be strict for now and redirect to login
                 throw error || new Error('Whitelisting check failed');
             }
+
 
             console.log('AuthContext: Whitelist check passed', { role: data.role, brand: data.brand_id });
             // Sync with Zustand store

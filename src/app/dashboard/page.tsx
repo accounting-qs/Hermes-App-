@@ -12,28 +12,53 @@ import {
     Clock,
     AlertCircle,
     ChevronRight,
-    Sparkles
+    Sparkles,
+    Loader2
 } from "lucide-react";
-import { useBrandStore } from "@/store/useBrandStore";
-import { useAuthStore } from "@/store/useAuthStore";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthContext";
+import { createClient } from "@/lib/supabase-ssr/client";
 
 export default function DashboardPage() {
-    const { brands } = useBrandStore();
+    const [brands, setBrands] = React.useState<any[]>([]);
+    const [isLoading, setIsLoading] = React.useState(true);
     const { user } = useAuth();
+    const supabase = createClient();
+
+    const fetchBrands = async () => {
+        setIsLoading(true);
+        try {
+            const { data, error } = await supabase
+                .from('brands')
+                .select('*')
+                .order('name');
+
+            if (error) throw error;
+            if (data) setBrands(data);
+        } catch (error) {
+            console.error("Dashboard: Error fetching brands:", error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    React.useEffect(() => {
+        fetchBrands();
+    }, []);
 
 
-    const stats = [
+    const stats = React.useMemo(() => [
         { title: "Active Brands", value: brands.length, trend: "+2", isUp: true, icon: Users, color: "bg-emerald-500/10 text-emerald-500" },
         { title: "Webinars (Mo)", value: "12", trend: "+15%", isUp: true, icon: Video, color: "bg-blue-500/10 text-blue-500" },
         { title: "Avg. Show Rate", value: "42.5%", trend: "-2.4%", isUp: false, icon: BarChart3, color: "bg-purple-500/10 text-purple-500" },
         { title: "Calls Booked", value: "84", trend: "+12", isUp: true, icon: PhoneCall, color: "bg-orange-500/10 text-orange-500" },
-    ];
+    ], [brands.length]);
 
-    const attentionRequired = brands.filter(b => b.progress.overall < 100).slice(0, 2);
+    const attentionRequired = React.useMemo(() =>
+        brands.filter(b => (b.progress?.overall ?? 0) < 100).slice(0, 2),
+        [brands]);
 
     return (
         <div className="space-y-10 pb-20 p-6 md:p-10 max-w-[1600px] mx-auto">
@@ -100,7 +125,16 @@ export default function DashboardPage() {
                         </div>
 
                         <div className="space-y-4">
-                            {attentionRequired.map((brand) => (
+                            {isLoading ? (
+                                <div className="flex flex-col items-center justify-center py-12 gap-4">
+                                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                                    <span className="text-xs font-black uppercase tracking-widest opacity-60">Scanning Brands...</span>
+                                </div>
+                            ) : attentionRequired.length === 0 ? (
+                                <div className="p-12 text-center glass-card border-dashed">
+                                    <p className="text-muted-foreground text-sm">All systems normal. No brands requiring immediate attention.</p>
+                                </div>
+                            ) : attentionRequired.map((brand) => (
                                 <div key={brand.id} className="bg-card border border-border/50 rounded-2xl p-6 hover:border-primary/50 transition-all cursor-pointer shadow-sm group">
                                     <div className="flex items-start justify-between mb-6">
                                         <div className="flex items-center gap-4">
@@ -109,7 +143,7 @@ export default function DashboardPage() {
                                             </div>
                                             <div>
                                                 <div className="font-bold text-base group-hover:text-primary transition-colors">{brand.name}</div>
-                                                <div className="text-[10px] text-muted-foreground uppercase font-black tracking-widest opacity-70">PHASE: {brand.phase}</div>
+                                                <div className="text-[10px] text-muted-foreground uppercase font-black tracking-widest opacity-70">PHASE: {brand.phase || 'N/A'}</div>
                                             </div>
                                         </div>
                                         <button className="text-muted-foreground hover:text-foreground">
@@ -119,12 +153,12 @@ export default function DashboardPage() {
                                     <div className="space-y-2">
                                         <div className="flex justify-between text-[10px] font-black uppercase tracking-widest opacity-60">
                                             <span>Progress</span>
-                                            <span>{brand.progress.overall}%</span>
+                                            <span>{brand.progress?.overall ?? 0}%</span>
                                         </div>
                                         <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
                                             <motion.div
                                                 initial={{ width: 0 }}
-                                                animate={{ width: `${brand.progress.overall}%` }}
+                                                animate={{ width: `${brand.progress?.overall ?? 0}%` }}
                                                 className="h-full bg-emerald-500"
                                             />
                                         </div>
@@ -171,7 +205,25 @@ export default function DashboardPage() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {brands.map((brand, idx) => (
+                        {isLoading ? (
+                            Array.from({ length: 2 }).map((_, i) => (
+                                <div key={i} className="bg-card border border-border/50 rounded-3xl p-8 animate-pulse">
+                                    <div className="flex items-center gap-5 mb-8">
+                                        <div className="w-14 h-14 rounded-2xl bg-secondary" />
+                                        <div className="space-y-2">
+                                            <div className="h-4 w-32 bg-secondary rounded" />
+                                            <div className="h-3 w-20 bg-secondary rounded" />
+                                        </div>
+                                    </div>
+                                    <div className="h-2.5 w-full bg-secondary rounded-full" />
+                                </div>
+                            ))
+                        ) : brands.length === 0 ? (
+                            <div className="col-span-full py-20 text-center glass-card">
+                                <p className="text-muted-foreground">No active brands found. Start by creating your first brand.</p>
+                                <Link href="/brands" className="inline-block mt-4 text-primary font-black uppercase tracking-widest text-xs">Go to Brands</Link>
+                            </div>
+                        ) : brands.map((brand, idx) => (
                             <motion.div
                                 key={brand.id}
                                 initial={{ opacity: 0, scale: 0.98 }}
@@ -201,7 +253,7 @@ export default function DashboardPage() {
                                     <div className="grid grid-cols-2 gap-6 mb-8">
                                         <div className="space-y-1.5">
                                             <div className="text-[10px] text-muted-foreground uppercase font-black tracking-widest opacity-60">Phase</div>
-                                            <div className="text-base font-black capitalize leading-none">{brand.phase}</div>
+                                            <div className="text-base font-black capitalize leading-none">{brand.phase || 'N/A'}</div>
                                         </div>
                                         <div className="space-y-1.5">
                                             <div className="text-[10px] text-muted-foreground uppercase font-black tracking-widest opacity-60">Health</div>
@@ -219,12 +271,12 @@ export default function DashboardPage() {
                                     <div className="space-y-4">
                                         <div className="flex justify-between text-[11px] font-black uppercase tracking-widest opacity-60">
                                             <span>Launch Progress</span>
-                                            <span>{brand.progress.overall}%</span>
+                                            <span>{brand.progress?.overall ?? 0}%</span>
                                         </div>
                                         <div className="h-2.5 w-full bg-secondary rounded-full overflow-hidden">
                                             <div
                                                 className="h-full bg-emerald-500 transition-all duration-1000 ease-out"
-                                                style={{ width: `${brand.progress.overall}%` }}
+                                                style={{ width: `${brand.progress?.overall ?? 0}%` }}
                                             />
                                         </div>
                                     </div>

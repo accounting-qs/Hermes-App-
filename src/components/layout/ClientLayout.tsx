@@ -9,6 +9,7 @@ import { useBrandStore } from "@/store/useBrandStore";
 import { usePathname, useRouter } from "next/navigation";
 import { QuantumCopilot } from "@/components/copilot/Copilot";
 import { useAuth } from "@/components/AuthContext";
+import { createClient } from "@/lib/supabase-ssr/client";
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
     const { isAuthenticated } = useAuthStore();
@@ -18,10 +19,22 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const pathname = usePathname();
 
+    const supabase = createClient();
+    const { setBrands } = useBrandStore();
+
     useEffect(() => {
         console.log('ClientLayout: Mounted');
         setMounted(true);
-    }, []);
+
+        const fetchGlobalBrands = async () => {
+            const { data } = await supabase.from('brands').select('*').order('name');
+            if (data) setBrands(data);
+        };
+
+        if (isAuthenticated) {
+            fetchGlobalBrands();
+        }
+    }, [isAuthenticated]);
 
     // Only allow public routes (/login, /unauthorized, /auth/callback) to render without authentication
     const isPublicRoute = pathname === '/login' || pathname === '/unauthorized' || pathname.startsWith('/auth/callback');

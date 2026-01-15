@@ -18,6 +18,10 @@ export interface Brand {
   name: string;
   industry: string;
   status: BrandStatus;
+  phase: string;
+  progress: {
+    overall: number;
+  };
   createdAt: string;
   updatedAt: string;
 }
