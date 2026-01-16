@@ -1,10 +1,10 @@
 import { create } from 'zustand';
-import { ResearchSession, ResearchPhase, ValidationStatus, ValidationResult } from '@/types/research';
+import { ResearchSession, ResearchPhase, ValidationResult, CaseStudy } from '@/types/research';
 
 interface ResearchState {
     currentSession: ResearchSession | null;
     isLoading: boolean;
-    activeStep: number; // 0, 1, 2 derived from phase? Or explicit step index for UI
+    activeStep: number;
 
     // Actions
     setSession: (session: ResearchSession) => void;
@@ -12,22 +12,15 @@ interface ResearchState {
     setValidationResult: (path: string, result: ValidationResult) => void;
     setLoading: (loading: boolean) => void;
 
+    // Array Helpers (Specific for repeatable blocks)
+    addCaseStudy: () => void;
+    removeCaseStudy: (index: number) => void;
+    updateCaseStudy: (index: number, field: keyof CaseStudy, value: any) => void;
+
     // Computed/Helper
     getPhaseProgress: (phase: ResearchPhase) => number;
     isPhaseLocked: (phase: ResearchPhase) => boolean;
 }
-
-const INITIAL_SESSION: ResearchSession = {
-    id: '',
-    brand_id: '',
-    current_phase: 'market',
-    progress: { market: 0, avatar: 0, pains: 0 },
-    data: { market: {}, avatar: {}, pains: {} },
-    validation: {},
-    status: 'draft',
-    created_at: '',
-    updated_at: ''
-};
 
 export const useResearchStore = create<ResearchState>((set, get) => ({
     currentSession: null,
@@ -35,36 +28,112 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
     activeStep: 0,
 
     setSession: (session) => set({ currentSession: session }),
-
     setLoading: (loading) => set({ isLoading: loading }),
 
     updateFormData: (phase, path, value) => {
         set((state) => {
             if (!state.currentSession) return state;
 
-            // Deep merge logic simplified for this example
-            // In reality, we might use Immer or a careful spread
-            // path could be "companyDetails.mission"
-
             const newData = { ...state.currentSession.data };
-            // @ts-ignore - dynamic key access for simplicity in prototype
-            if (!newData[phase]) newData[phase] = {};
+            if (!newData[phase]) (newData as any)[phase] = {};
 
-            // Very simple 1-level nested update support for demo (e.g., 'companyDetails')
-            // Real implementation would parse path "companyDetails.mission"
             const keys = path.split('.');
-            if (keys.length === 1) {
-                // @ts-ignore
-                newData[phase][keys[0]] = value;
-            } else if (keys.length === 2) {
-                // @ts-ignore
-                newData[phase][keys[0]] = { ...newData[phase][keys[0]], [keys[1]]: value };
+            let current: any = newData[phase];
+
+            for (let i = 0; i < keys.length - 1; i++) {
+                const key = keys[i];
+                if (!current[key]) current[key] = {};
+                current[key] = { ...current[key] }; // Shallow copy for immutability
+                current = current[key];
             }
+
+            current[keys[keys.length - 1]] = value;
 
             return {
                 currentSession: {
                     ...state.currentSession,
                     data: newData
+                }
+            };
+        });
+    },
+
+    addCaseStudy: () => {
+        set((state) => {
+            if (!state.currentSession) return state;
+            const market = state.currentSession.data.market || {};
+            const caseStudies = [...(market.caseStudies || [])];
+
+            const newCase: CaseStudy = {
+                id: Math.random().toString(36).substring(7),
+                clientDescriptor: '',
+                startingSituation: '',
+                constraints: '',
+                intervention: '',
+                timeline: '',
+                measuredResults: '',
+                timeToValue: '',
+                roi: '',
+                clientQuote: '',
+                permissionStatus: 'requested'
+            };
+
+            return {
+                currentSession: {
+                    ...state.currentSession,
+                    data: {
+                        ...state.currentSession.data,
+                        market: {
+                            ...market,
+                            caseStudies: [...caseStudies, newCase]
+                        }
+                    }
+                }
+            };
+        });
+    },
+
+    removeCaseStudy: (index) => {
+        set((state) => {
+            if (!state.currentSession) return state;
+            const market = state.currentSession.data.market || {};
+            const caseStudies = (market.caseStudies || []).filter((_, i) => i !== index);
+
+            return {
+                currentSession: {
+                    ...state.currentSession,
+                    data: {
+                        ...state.currentSession.data,
+                        market: {
+                            ...market,
+                            caseStudies
+                        }
+                    }
+                }
+            };
+        });
+    },
+
+    updateCaseStudy: (index, field, value) => {
+        set((state) => {
+            if (!state.currentSession) return state;
+            const market = state.currentSession.data.market || {};
+            const caseStudies = [...(market.caseStudies || [])];
+
+            if (caseStudies[index]) {
+                caseStudies[index] = { ...caseStudies[index], [field]: value };
+            }
+
+            return {
+                currentSession: {
+                    ...state.currentSession,
+                    data: {
+                        ...state.currentSession.data,
+                        market: {
+                            ...market,
+                            caseStudies
+                        }
+                    }
                 }
             };
         });
@@ -95,9 +164,9 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
         const session = get().currentSession;
         if (!session) return true;
 
-        if (phase === 'market') return false; // Always open
-        if (phase === 'avatar') return session.progress.market < 100;
-        if (phase === 'pains') return session.progress.avatar < 100;
+        if (phase === 'market') return false;
+        if (phase === 'avatar') return (session.progress.market || 0) < 100;
+        if (phase === 'pains') return (session.progress.avatar || 0) < 100;
 
         return true;
     }

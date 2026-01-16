@@ -1,10 +1,16 @@
 "use server";
 
+// Polyfill for DOMMatrix which is used by pdf-parse's dependencies but missing in Node.js
+if (typeof global.DOMMatrix === 'undefined') {
+    (global as any).DOMMatrix = class DOMMatrix {
+        constructor() { }
+        static fromFloat32Array() { return new DOMMatrix(); }
+        static fromFloat64Array() { return new DOMMatrix(); }
+    } as any;
+}
+
 import { createClient } from "@/lib/supabase-ssr/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import pdf from "pdf-parse";
-import mammoth from "mammoth";
-
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 const embeddingModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
 
@@ -14,6 +20,10 @@ const CHARS_PER_TOKEN = 4; // Rough heuristic
 
 export async function processResource(resourceId: string) {
     const supabase = await createClient();
+
+    // Dynamically require heavy Node.js libraries only on execution to avoid Turbopack build issues
+    const { PDFParse } = require("pdf-parse");
+    const mammoth = require("mammoth");
 
     try {
         // 1. Fetch Resource record
@@ -47,8 +57,10 @@ export async function processResource(resourceId: string) {
 
             // 4. Extract Text
             if (resource.metadata.mime_type === 'application/pdf') {
-                const pdfData = await pdf(buffer);
+                const parser = new PDFParse({ data: buffer });
+                const pdfData = await parser.getText();
                 text = pdfData.text;
+                await parser.destroy();
             } else if (resource.metadata.mime_type?.includes('officedocument.wordprocessingml.document')) {
                 const result = await mammoth.extractRawText({ buffer });
                 text = result.value;

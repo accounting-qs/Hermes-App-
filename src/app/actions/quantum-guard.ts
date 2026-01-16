@@ -57,3 +57,28 @@ export async function validateInputWithAI(field: string, input: string): Promise
         return { isValid: true, feedback: "AI Validation unavailable, proceeding with caution." };
     }
 }
+export async function generateResearchContent(field: string, context: any): Promise<string> {
+    if (!process.env.GEMINI_API_KEY) return "AI Generation requires API Key.";
+
+    try {
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+        const prompt = `
+            You are "Hermes AI", a master marketing strategist.
+            Generate a high-quality, professional, and specific response for the research field: "${field}".
+            
+            Context about the business: ${JSON.stringify(context)}
+            
+            Rules:
+            1. Be extremely specific.
+            2. Use industry-standard terminology.
+            3. Make it punchy and high-end.
+            4. Output ONLY the response text, no meta-talk.
+        `;
+
+        const result = await model.generateContent(prompt);
+        return result.response.text().trim();
+    } catch (error) {
+        console.error("Generation Error:", error);
+        return "Failed to generate content.";
+    }
+}

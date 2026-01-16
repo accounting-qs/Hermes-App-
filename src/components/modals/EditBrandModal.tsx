@@ -42,11 +42,15 @@ export function EditBrandModal({ brand, isOpen, onClose, onSuccess }: EditBrandM
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!brand) return;
-        
+        if (!brand || !brand.id) {
+            console.error("EditBrandModal: No brand or brand ID provided.");
+            return;
+        }
+
         setIsLoading(true);
 
         try {
+            console.log("EditBrandModal: Attempting to update brand:", brand.id);
             const { error } = await supabase
                 .from('brands')
                 .update({
@@ -59,14 +63,21 @@ export function EditBrandModal({ brand, isOpen, onClose, onSuccess }: EditBrandM
                 })
                 .eq('id', brand.id);
 
-            if (error) throw error;
+            if (error) {
+                // Break the {} empty error wall
+                console.error('SUPABASE UPDATE ERROR:', {
+                    message: error.message,
+                    code: error.code,
+                    details: error.details
+                });
+                throw error;
+            }
 
             toast.success(`Brand "${formData.name}" updated successfully`);
             onSuccess();
             onClose();
 
         } catch (error: any) {
-            console.error("EditBrandModal: Error updating brand:", error);
             toast.error(error.message || "Failed to update brand");
         } finally {
             setIsLoading(false);

@@ -3,36 +3,98 @@ export type ValidationStatus = 'idle' | 'validating' | 'valid' | 'invalid';
 
 export interface ValidationResult {
     isValid: boolean;
-    feedback?: string; // AI suggestions if invalid
-    score?: number; // 0-100 quality score
+    feedback?: string;
+    score?: number;
 }
 
-// --- Phase 1: Market Research ---
+// --- Section 4: Case Study Blocks ---
+export interface CaseStudy {
+    id: string;
+    clientDescriptor: string; // "e.g., E-commerce SaaS founder"
+    startingSituation: string;
+    constraints: string;
+    intervention: string;
+    timeline: string;
+    measuredResults: string;
+    timeToValue: string;
+    roi: string;
+    clientQuote: string;
+    permissionStatus: 'granted' | 'requested' | 'strictly_anonymous';
+    artifacts?: string[]; // URLs
+}
+
+// --- Phase 1: Market Research (Refactored) ---
 export interface MarketResearchData {
+    // Section 1: Company Details
     companyDetails: {
-        promotionalName?: string;
-        website?: string;
+        promotionalName: string;
+        productName?: string;
+        primaryCTA: string;
+        yearsInBusiness: string;
+        clientsServed: string;
+        websites: string[]; // List of URLs
         mission: string;
         vision?: string;
         uniqueValueProposition: string;
     };
+
+    // Section 2: Target Audience & Apollo Filters
     targetAudience: {
-        description?: string; // "ICP Description (Long text)"
-        industries: string[];
-        companySize: string[]; // e.g., "11-50", "51-200"
-        roles: string[]; // e.g., "CEO", "CMO"
-        revenueRange: string;
+        description: string;
         geography: string;
+        jobTitles: string[];
+        companyHeadcount: string[]; // ["1-10", "11-50", ...]
+        industryNames: string[];
+        companyKeywords: string[];
+        audienceQualifiers: string;
+        icpTiersExclusions: string;
+        seniorityLevels: string[];
+        revenueBrackets: string[];
     };
+
+    // Section 3: Unified Offer & Business Overview
     unifiedOffer: {
-        corePromise: string;
-        pricingModel?: string;
-        deliverables: string;
+        // A) Snapshot & Positioning
+        snapshot: {
+            elevatorPitch: string;
+            productType: string; // Single select
+            coreFeatures: string;
+        };
+        // B) Problem & Alternatives
+        problem: {
+            topPains: string;
+            urgencyStakes: string;
+            alternatives: string;
+        };
+        // C) Solution Mapping & Delivery
+        solution: {
+            mapping: string; // Solution per pain point
+            implementationPlan: string;
+            corePromise: string;
+            uspClaims: string;
+        };
+        // D) Benefits & Outcomes
+        outcomes: {
+            tangible: string;
+            intangible: string;
+            top3Outcomes: string;
+        };
+        // E) Offer Mechanics & Commercials
+        mechanics: {
+            priceStructure: string;
+            incentives: string;
+            riskReversal: string;
+            scarcityUrgency: string;
+        };
+        // F) Credibility & Proof
+        credibility: {
+            awards: string;
+            media: string;
+        };
     };
-    competitors: {
-        direct: string[]; // List of competitor names/URLs
-        indirect: string[];
-    };
+
+    // Section 4: Case Study & Proof Builder
+    caseStudies: CaseStudy[];
 }
 
 // --- Phase 2: Avatar Discovery ---
@@ -49,50 +111,50 @@ export interface AvatarResearchData {
         };
     };
     innerNarrative: {
-        hopesAndDreams: string; // "Short term wins & Legacy ambitions"
+        hopesAndDreams: string;
         dailyRoutine: string;
-        victoriesAndFailures: string; // "Top 3 wins, Top 3 failures"
-        coreBeliefs: string; // "Beliefs about Life, Love, Family"
+        victoriesAndFailures: string;
+        coreBeliefs: string;
         secretFears: string;
     };
     marketExperience: {
         currentSolutions: string;
         likesAndDislikes: string;
-        horrorStories: string; // "Previous bad experiences"
+        horrorStories: string;
     };
     curiosityAndCorruption: {
-        uniqueMechanisms: string; // "What have they tried?"
-        corruptionEvents: string; // "Why the problem has worsened recently (Outside Forces)"
+        uniqueMechanisms: string;
+        corruptionEvents: string;
     };
 }
 
 // --- Phase 3: Pains & Desires ---
 export interface PainsResearchData {
     painPoints: {
-        foundational: string; // Top 5-10 biggest pains, quotes, nightmare scenarios
-        breakingPoint: string; // "Straw that broke the camel's back"
-        emotional: string; // How they feel about themselves, limiting beliefs
+        foundational: string;
+        breakingPoint: string;
+        emotional: string;
     };
     impactAnalysis: {
         health: string;
-        relationships: string; // Family/Relationships
+        relationships: string;
         finances: string;
-        career: string; // Career/Business
+        career: string;
     };
     avoidanceAndTriggers: {
-        tolerations: string; // Things they refuse to tolerate
-        triggers: string; // Primary triggers for fear/frustration
-        relief: string; // What stress would vanish if solved
+        tolerations: string;
+        triggers: string;
+        relief: string;
     };
     desiredFuture: {
-        idealOutcome: string; // Dream scenarios, Big Win
-        dayToDay: string; // Life without the problem
-        motivation: string; // 12-month goals, deeper drivers
-        legacy: string; // Impact
+        idealOutcome: string;
+        dayToDay: string;
+        motivation: string;
+        legacy: string;
     };
     solutionPreferences: {
         convenience: string;
-        delivery: string; // Preferred delivery method
+        delivery: string;
     };
 }
 

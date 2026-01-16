@@ -1,3 +1,4 @@
+"use client";
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useResearchStore } from '@/store/useResearchStore';
@@ -7,14 +8,15 @@ import { MarketResearchForm } from '@/components/brands/research/MarketResearchF
 import { AvatarDiscoveryForm } from '@/components/brands/research/AvatarDiscoveryForm';
 import { PainsResearchForm } from '@/components/brands/research/PainsResearchForm';
 import { useResearchSync } from '@/hooks/useResearchSync';
-import { Search, Loader2, Sparkles } from 'lucide-react';
-import { createClient } from '@/lib/supabase-ssr/client';
+import { ResearchLayout } from '@/components/brands/research/ResearchLayout';
 import { generateResearchReport } from '@/app/actions/generate-report';
 import { ReportViewer } from '@/components/brands/research/ReportViewer';
+import { Loader2, Search, Sparkles } from 'lucide-react';
+import { createClient } from '@/lib/supabase-ssr/client';
 
 export default function ResearchPage() {
     const { id } = useParams();
-    const brandId = Array.isArray(id) ? id[0] : id;
+    const brandId = (Array.isArray(id) ? id[0] : id) as string;
 
     // Auto-Save Sync
     useResearchSync(brandId); // This will listen to store changes
@@ -30,7 +32,8 @@ export default function ResearchPage() {
     } = useResearchStore();
 
     // Local state for active phase in UI (synced with store but capable of navigation)
-    const [activePhase, setActivePhase] = React.useState<ResearchPhase>('market');
+    const [activePhase, setActivePhase] = useState<ResearchPhase>('market');
+    const [section, setSection] = useState(1);
     const [isGenerating, setIsGenerating] = useState(false);
     const [reportContent, setReportContent] = useState<string | null>(null);
 
@@ -47,17 +50,12 @@ export default function ResearchPage() {
                 .from('research_sessions')
                 .select('*')
                 .eq('brand_id', brandId)
-                // .eq('status', 'draft') // In strict mode we might filter drafts
                 .order('created_at', { ascending: false })
                 .limit(1)
-                .single();
+                .maybeSingle();
 
             if (data) {
                 setSession(data as any);
-                // Auto-navigate to latest incomplete phase? Logic for later.
-            } else {
-                // Create new placeholder in store (not DB yet until first save?)
-                // Or fetch empty state
             }
             setLoading(false);
         };
@@ -82,123 +80,103 @@ export default function ResearchPage() {
         }
     }, [currentSession, reportContent]);
 
-    const handleGenerateReport = async () => {
-        if (!currentSession) return;
-        setIsGenerating(true);
-        try {
-            const result = await generateResearchReport(currentSession);
-            if (result.success && result.report) {
-                setReportContent(result.report.content);
-            } else {
-                alert("Failed to generate report. Please try again.");
-            }
-        } catch (e) {
-            console.error(e);
-            alert("Error generating report.");
-        } finally {
-            setIsGenerating(false);
+    const phaseConfig: Record<ResearchPhase, { title: string; subtitle: string; totalSections: number }> = {
+        market: {
+            title: "Market Research",
+            subtitle: "Strategic deep-dive into your market position.",
+            totalSections: 4
+        },
+        avatar: {
+            title: "Avatar Discovery",
+            subtitle: "Mapping the psychological profile of your ideal client.",
+            totalSections: 1
+        },
+        pains: {
+            title: "Pains & Desires",
+            subtitle: "Analyzing the emotional triggers of your market.",
+            totalSections: 1
         }
     };
 
-    const phases = [
-        { id: 'market' as ResearchPhase, label: 'Market Research', progress: getPhaseProgress('market'), locked: false },
-        { id: 'avatar' as ResearchPhase, label: 'Avatar Discovery', progress: getPhaseProgress('avatar'), locked: isPhaseLocked('avatar') },
-        { id: 'pains' as ResearchPhase, label: 'Pains & Desires', progress: getPhaseProgress('pains'), locked: isPhaseLocked('pains') },
-    ];
+    const currentConfig = phaseConfig[activePhase];
+
+    const sectionTitles: Record<string, string[]> = {
+        market: [
+            "Company Fundamentals",
+            "Target Audience & Apollo.io Filters",
+            "Unified Offer & Business Overview",
+            "Case Study & Proof Builder"
+        ],
+        avatar: ["Ideal Customer Profile"],
+        pains: ["Pain Points & Desires"]
+    };
+
+    const sectionSubtitles: Record<string, string[]> = {
+        market: [
+            "The foundational data points for your brand context.",
+            "Map out the exact hunters we are targeting.",
+            "The strategic engineering of your conversion mechanism.",
+            "Document individual wins to build undeniable credibility."
+        ],
+        avatar: ["Psychographic mapping of your best customers."],
+        pains: ["Emotional triggers and stakes analysis."]
+    };
+
+    const handleNext = () => {
+        if (section < currentConfig.totalSections) {
+            setSection(section + 1);
+        } else {
+            // Next Phase logic
+            if (activePhase === 'market') { setActivePhase('avatar'); setSection(1); }
+            else if (activePhase === 'avatar') { setActivePhase('pains'); setSection(1); }
+        }
+    };
+
+    const handleBack = () => {
+        if (section > 1) {
+            setSection(section - 1);
+        } else {
+            // Previous Phase
+            if (activePhase === 'avatar') { setActivePhase('market'); setSection(phaseConfig.market.totalSections); }
+            else if (activePhase === 'pains') { setActivePhase('avatar'); setSection(phaseConfig.avatar.totalSections); }
+        }
+    };
+
+    if (isLoading || isGenerating) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-6">
+                <Loader2 className="w-16 h-16 animate-spin text-primary" />
+                <div className="text-center space-y-2">
+                    <h2 className="text-xl font-bold outfit-font animate-pulse">
+                        {isGenerating ? 'Synthesizing Market Intelligence...' : 'Accessing Brand Session...'}
+                    </h2>
+                    <p className="text-sm text-muted-foreground uppercase tracking-widest font-bold">Quantum AI Powered</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (reportContent) {
+        return <ReportViewer initialContent={reportContent} />;
+    }
 
     return (
-        <div className="space-y-8 pb-12 animate-in fade-in duration-500">
-            {/* Header */}
-            <div>
-                <h1 className="text-3xl font-bold outfit-font flex items-center gap-3">
-                    <Search className="w-8 h-8 text-primary" />
-                    Research Hub
-                </h1>
-                <p className="text-muted-foreground mt-1">
-                    Execute the sequential deep-dive to extract the core brand DNA.
-                </p>
-            </div>
-
-            {/* Stepper (Hide if report view?) */}
-            {!reportContent && (
-                <div className="max-w-3xl mx-auto py-6">
-                    <ResearchStepper
-                        currentPhase={activePhase}
-                        phases={phases}
-                        onPhaseChange={setActivePhase}
-                    />
-                </div>
-            )}
-
-            {/* Main Main Area */}
-            <div className={`glass-card min-h-[400px] ${reportContent ? 'p-0 overflow-hidden' : 'p-8'} relative`}>
-                {(isLoading || isGenerating) ? (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm z-50 gap-4">
-                        <Loader2 className="w-12 h-12 animate-spin text-primary" />
-                        <div className="text-center space-y-2">
-                            <h3 className="text-lg font-bold animate-pulse">
-                                {isGenerating ? 'Synthesizing Intelligence...' : 'Loading Session...'}
-                            </h3>
-                            <p className="text-sm text-muted-foreground">
-                                {isGenerating ? 'Analyzing 50+ data points with Quantum AI' : 'Fetching your progress'}
-                            </p>
-                        </div>
-                    </div>
-                ) : reportContent ? (
-                    <ReportViewer initialContent={reportContent} />
-                ) : (
-                    <div className="max-w-3xl mx-auto">
-                        {activePhase === 'market' && <MarketResearchForm />}
-
-                        {activePhase === 'avatar' && (
-                            // locked check should technically happen in Stepper/Store but safeguarding here
-                            // For now assuming visual lock prevents click
-                            <AvatarDiscoveryForm />
-                        )}
-                        {activePhase === 'pains' && (
-                            <div className="text-center p-12 text-muted-foreground">
-                                Pains & Desires Form Coming Soon (Locked)
-                            </div>
-                        )}
-
-                        {/* Navigation Actions */}
-                        <div className="mt-12 flex justify-between pt-6 border-t border-border">
-                            {activePhase !== 'market' ? (
-                                <button
-                                    onClick={() => {
-                                        if (activePhase === 'avatar') setActivePhase('market');
-                                        if (activePhase === 'pains') setActivePhase('avatar');
-                                    }}
-                                    className="px-6 py-2 text-muted-foreground hover:text-foreground transition-colors"
-                                >
-                                    Back
-                                </button>
-                            ) : <div />}
-
-                            {activePhase !== 'pains' ? (
-                                <button
-                                    onClick={() => {
-                                        if (activePhase === 'market') setActivePhase('avatar');
-                                        if (activePhase === 'avatar') setActivePhase('pains');
-                                    }}
-                                    className="px-8 py-3 bg-secondary text-primary rounded-xl font-bold hover:bg-secondary/80 transition-all"
-                                >
-                                    Next Phase
-                                </button>
-                            ) : (
-                                <button
-                                    className="px-8 py-3 premium-gradient text-white rounded-xl font-bold shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 transition-all flex items-center gap-2"
-                                    onClick={handleGenerateReport}
-                                    disabled={isGenerating}
-                                >
-                                    <Sparkles className="w-4 h-4" />
-                                    Generate Research Report
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                )}
-            </div>
-        </div>
+        <ResearchLayout
+            currentSection={section}
+            totalSections={currentConfig.totalSections}
+            title={sectionTitles[activePhase][section - 1]}
+            subtitle={sectionSubtitles[activePhase][section - 1]}
+            activePhase={activePhase}
+            onPhaseChange={(phase) => { setActivePhase(phase); setSection(1); }}
+            onNext={handleNext}
+            onBack={handleBack}
+            canBack={activePhase !== 'market' || section > 1}
+            canNext={true}
+            onSave={() => { }} // Hooked into auto-save via useResearchSync
+        >
+            {activePhase === 'market' && <MarketResearchForm section={section} />}
+            {activePhase === 'avatar' && <AvatarDiscoveryForm />}
+            {activePhase === 'pains' && <div className="p-12 text-center text-muted-foreground">Pains Discovery Coming Soon</div>}
+        </ResearchLayout>
     );
 }
