@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase-ssr/client';
 
 import { Session, User as SupabaseUser } from '@supabase/supabase-js';
 import { useAuthStore } from '@/store/useAuthStore';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { User, UserRole } from '@/types';
 
 
@@ -70,7 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return () => {
             console.log('AuthContext: Cleaning up subscription');
             clearTimeout(timeoutId);
-            subscription.unsubscribe();
+            if (subscription) subscription.unsubscribe();
         };
     }, []);
 
@@ -147,8 +147,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         } catch (err) {
             console.error('AuthContext: Whitelist check failure', err);
-            // Only stop loading if we were loading
-            if (isInitialLoad) setIsLoading(false);
         } finally {
             if (isInitialLoad) {
                 console.log('AuthContext: Initial whitelist check finished, releasing loader');
@@ -156,6 +154,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
         }
     };
+
+    const pathname = usePathname();
+
+    // 3. Client-side Redirection Fallback
+    useEffect(() => {
+        if (!isLoading && !user) {
+            const isPublicRoute = pathname === '/login' || pathname === '/unauthorized' || pathname.startsWith('/auth/callback') || pathname === '/';
+            if (!isPublicRoute) {
+                console.log('AuthContext: No session detected on protected route, redirecting to login');
+                router.replace('/login');
+            } else if (pathname === '/') {
+                // If middleware failed, this is the catch-all for the guest root
+                console.log('AuthContext: Guest at root, pushing to login');
+                router.replace('/login');
+            }
+        }
+    }, [isLoading, user, pathname, router]);
+
 
 
     const signOut = async () => {

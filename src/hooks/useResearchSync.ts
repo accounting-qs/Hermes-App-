@@ -1,10 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useResearchStore } from '@/store/useResearchStore';
 import { createClient } from '@/lib/supabase-ssr/client';
-import { toast } from 'sonner'; // Assuming sonner or generic toast
-import { debounce } from 'lodash';
-// Note: If lodash not installed, I'll write a manual debounce. 
-// Given current context, let's write a manual simple debounce or check package.json later.
+// Note: Auto-save debounce is handled via useEffect timeout to avoid external dependencies.
 // I'll stick to a useEffect based debounce without lodash for safety.
 
 export const useResearchSync = (brandId: string) => {

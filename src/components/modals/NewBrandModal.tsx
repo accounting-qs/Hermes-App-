@@ -24,7 +24,7 @@ export function NewBrandModal({ isOpen, onClose, onSuccess }: NewBrandModalProps
     const [selectedStatus, setSelectedStatus] = useState<BrandStatus>('onboarding'); // Manage status separately
 
     const supabase = createClient();
-    const toast = useToast(); // Corrected usage
+    const toast = useToast();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -160,10 +160,10 @@ export function NewBrandModal({ isOpen, onClose, onSuccess }: NewBrandModalProps
                                             <button
                                                 key={status}
                                                 type="button"
-                                                onClick={() => setFormData({ ...formData, status })}
+                                                onClick={() => setSelectedStatus(status)}
                                                 className={cn(
                                                     "py-2 px-3 rounded-xl border text-[10px] font-bold uppercase tracking-widest transition-all",
-                                                    formData.status === status
+                                                    selectedStatus === status
                                                         ? "bg-primary/10 border-primary text-primary shadow-sm shadow-primary/20"
                                                         : "bg-secondary/50 border-border/50 text-muted-foreground hover:border-muted-foreground/50"
                                                 )}

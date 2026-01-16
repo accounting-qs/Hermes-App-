@@ -12,7 +12,10 @@ export async function generateResearchReport(sessionData: ResearchSession) {
         throw new Error("GEMINI_API_KEY not set");
     }
 
-    const { market, avatar, pains } = sessionData.data;
+    const data = sessionData.data || {};
+    const market = data.market;
+    const avatar = data.avatar;
+    const pains = data.pains;
 
     // Construct the Context Prompt
     const prompt = `
@@ -26,30 +29,30 @@ export async function generateResearchReport(sessionData: ResearchSession) {
         --- RAW DATA START ---
         
         PHASE 1: MARKET FUNDAMENTALS
-        Company: ${market.companyDetails?.promotionalName}
-        Mission: ${market.companyDetails?.mission}
-        Target Audience Description: ${market.targetAudience?.description}
-        Offer Core Promise: ${market.unifiedOffer?.corePromise}
+        Company: ${market?.companyDetails?.promotionalName || 'N/A'}
+        Mission: ${market?.companyDetails?.mission || 'N/A'}
+        Target Audience Description: ${market?.targetAudience?.description || 'N/A'}
+        Offer Core Promise: ${market?.unifiedOffer?.corePromise || 'N/A'}
 
         PHASE 2: AVATAR PSYCHOLOGY
-        Demographics: ${avatar.demographics?.ageRange}, ${avatar.demographics?.genderSplit}, ${avatar.demographics?.occupation}
-        Hopes & Dreams: ${avatar.innerNarrative?.hopesAndDreams}
-        Secret Fears: ${avatar.innerNarrative?.secretFears}
-        Victories/Failures: ${avatar.innerNarrative?.victoriesAndFailures}
-        Market Horror Stories: ${avatar.marketExperience?.horrorStories}
-        The "Corruption" (External Enemy): ${avatar.curiosityAndCorruption?.corruptionEvents}
+        Demographics: ${avatar?.demographics?.ageRange || 'N/A'}, ${avatar?.demographics?.genderSplit || 'N/A'}, ${avatar?.demographics?.occupation || 'N/A'}
+        Hopes & Dreams: ${avatar?.innerNarrative?.hopesAndDreams || 'N/A'}
+        Secret Fears: ${avatar?.innerNarrative?.secretFears || 'N/A'}
+        Victories/Failures: ${avatar?.innerNarrative?.victoriesAndFailures || 'N/A'}
+        Market Horror Stories: ${avatar?.marketExperience?.horrorStories || 'N/A'}
+        The "Corruption" (External Enemy): ${avatar?.curiosityAndCorruption?.corruptionEvents || 'N/A'}
 
         PHASE 3: PAINS & DESIRES
-        Foundational Pains: ${pains.painPoints?.foundational}
-        Breaking Point: ${pains.painPoints?.breakingPoint}
-        Emotional Impact (Self-Worth): ${pains.painPoints?.emotional}
+        Foundational Pains: ${pains?.painPoints?.foundational || 'N/A'}
+        Breaking Point: ${pains?.painPoints?.breakingPoint || 'N/A'}
+        Emotional Impact (Self-Worth): ${pains?.painPoints?.emotional || 'N/A'}
         Impact on Life (Health/Family/Money): 
-        - Health: ${pains.impactAnalysis?.health}
-        - Relationship: ${pains.impactAnalysis?.relationships}
-        - Finance: ${pains.impactAnalysis?.finances}
-        Triggers: ${pains.avoidanceAndTriggers?.triggers}
-        Dream Outcome: ${pains.desiredFuture?.idealOutcome}
-        Legacy: ${pains.desiredFuture?.legacy}
+        - Health: ${pains?.impactAnalysis?.health || 'N/A'}
+        - Relationship: ${pains?.impactAnalysis?.relationships || 'N/A'}
+        - Finance: ${pains?.impactAnalysis?.finances || 'N/A'}
+        Triggers: ${pains?.avoidanceAndTriggers?.triggers || 'N/A'}
+        Dream Outcome: ${pains?.desiredFuture?.idealOutcome || 'N/A'}
+        Legacy: ${pains?.desiredFuture?.legacy || 'N/A'}
 
         --- RAW DATA END ---
 
@@ -82,8 +85,8 @@ export async function generateResearchReport(sessionData: ResearchSession) {
     `;
 
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
-        const result = await model.generateContent(prompt);
+        const genModel = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+        const result = await genModel.generateContent(prompt);
         const reportContent = result.response.text();
 
         // Save to Supabase
@@ -100,16 +103,14 @@ export async function generateResearchReport(sessionData: ResearchSession) {
             .from('research_reports')
             .upsert({
                 session_id: sessionData.id,
-                brand_id: sessionData.brand_id, // Ensure this exists in Session
-                title: `Brand DNA Report - ${market.companyDetails?.promotionalName || 'Draft'}`,
+                brand_id: sessionData.brandId, // Changed from brand_id
+                title: `Brand DNA Report - ${market?.companyDetails?.promotionalName || 'Draft'}`,
                 content: reportContent,
                 status: 'generated',
                 is_current_version: true
             }, { onConflict: 'session_id' }) // Assuming unique on session_id
             .select('*')
             .single();
-
-        if (reportError) throw new Error(`Supabase Save Error: ${reportError.message}`);
 
         if (reportError) throw new Error(`Supabase Save Error: ${reportError.message}`);
 
@@ -124,7 +125,7 @@ export async function generateResearchReport(sessionData: ResearchSession) {
         const { error: milestoneError } = await supabase
             .from('brand_milestones')
             .upsert({
-                brand_id: sessionData.brand_id,
+                brand_id: sessionData.brandId,
                 milestone_id: 'research', // Matches module ID
                 status: 'completed',
                 progress: 100,
@@ -137,10 +138,10 @@ export async function generateResearchReport(sessionData: ResearchSession) {
         await supabase
             .from('brand_activity_log')
             .insert({
-                brand_id: sessionData.brand_id,
+                brand_id: sessionData.brandId,
                 action_type: 'created',
                 category: 'research',
-                description: `AI generated the Brand DNA Report for ${market.companyDetails?.promotionalName || 'Brand'}`,
+                description: `AI generated the Brand DNA Report for ${market?.companyDetails?.promotionalName || 'Brand'}`,
             });
 
         // 5. Update Top-Level Brand Progress (for quick Dashboard UI access)
@@ -148,10 +149,10 @@ export async function generateResearchReport(sessionData: ResearchSession) {
         const { data: brand } = await supabase
             .from('brands')
             .select('progress')
-            .eq('id', sessionData.brand_id)
+            .eq('id', sessionData.brandId)
             .single();
 
-        const currentProgress = brand?.progress || {};
+        const currentProgress = (brand as any)?.progress || {};
         await supabase
             .from('brands')
             .update({
@@ -160,12 +161,12 @@ export async function generateResearchReport(sessionData: ResearchSession) {
                     research: 100
                 }
             })
-            .eq('id', sessionData.brand_id);
+            .eq('id', sessionData.brandId);
 
         return { success: true, report: reportData };
 
     } catch (error: any) {
         console.error("Report Generation Error:", error);
-        return { success: false, error: error.message };
+        return { success: false, error: (error as Error).message };
     }
 }

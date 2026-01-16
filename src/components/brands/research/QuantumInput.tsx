@@ -37,11 +37,19 @@ export const QuantumInput: React.FC<QuantumInputProps> = ({
 
         if (result.isValid) {
             setStatus('valid');
-            setValidationResult(fieldId, { isValid: true, score: 95 });
+            setValidationResult(fieldId, {
+                isValid: true,
+                score: 95,
+                feedback: result.feedback || "Quantum approved."
+            });
         } else {
             setStatus('invalid');
-            setFeedback(result.feedback || "Please be more specific.");
-            setValidationResult(fieldId, { isValid: false, feedback: result.feedback });
+            const errorFeedback = result.feedback || "Please be more specific.";
+            setFeedback(errorFeedback);
+            setValidationResult(fieldId, {
+                isValid: false,
+                feedback: errorFeedback
+            });
         }
 
         if (onBlur) onBlur(e);

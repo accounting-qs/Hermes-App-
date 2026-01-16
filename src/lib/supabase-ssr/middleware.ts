@@ -21,9 +21,14 @@ export async function updateSession(request: NextRequest) {
                     supabaseResponse = NextResponse.next({
                         request,
                     })
-                    cookiesToSet.forEach(({ name, value, options }) =>
-                        supabaseResponse.cookies.set(name, value, options)
-                    )
+                    cookiesToSet.forEach(({ name, value, options }) => {
+                        const finalOptions = {
+                            ...options,
+                            secure: process.env.NODE_ENV === 'production' ? true : options.secure,
+                            sameSite: process.env.NODE_ENV === 'production' ? 'lax' : options.sameSite,
+                        };
+                        supabaseResponse.cookies.set(name, value, finalOptions)
+                    })
                 },
             },
         }
@@ -47,9 +52,9 @@ export async function updateSession(request: NextRequest) {
 
     // 1. Handle Invalid/Stale Sessions Logic
     if (userError || !user) {
-        // If we are on a protected route and have an error/no user, force clean slate
-        if (isProtectedRoute) {
-            console.log('Middleware: Protected route access denied. Redirecting to login.');
+        // If we are on a protected route OR the root path with no session, redirect to login
+        if (isProtectedRoute || pathname === '/') {
+            console.log(`Middleware: Unauthorized access to ${pathname}. Redirecting to login.`);
             const url = request.nextUrl.clone()
             url.pathname = '/login'
             // Clear cookies to prevent loops if session is corrupted

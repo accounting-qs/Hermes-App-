@@ -27,7 +27,7 @@ export default function BrandOverviewPage() {
     const supabase = createClient();
 
     // Convert 'id' to string safely
-    const brandId = Array.isArray(id) ? id[0] : id;
+    const brandId = (Array.isArray(id) ? id[0] : id) || '';
     const brand = brands.find(b => b.id === brandId);
 
     // Local State for New Data

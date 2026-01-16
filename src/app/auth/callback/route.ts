@@ -22,11 +22,14 @@ export async function GET(request: Request) {
 
             const target = (whitelistError || !allowedUser) ? '/unauthorized' : next;
 
-            const forwardedHost = request.headers.get('x-forwarded-host') // mirror sst-supplied host
             const isLocalEnv = process.env.NODE_ENV === 'development'
+            const siteUrl = process.env.NEXT_PUBLIC_SITE_URL // e.g. https://app.qs-institutes.com
+            const forwardedHost = request.headers.get('x-forwarded-host')
+
             if (isLocalEnv) {
-                // we can be sure that origin and forwardedHost are the same in dev
                 return NextResponse.redirect(`${origin}${target}`)
+            } else if (siteUrl) {
+                return NextResponse.redirect(`${siteUrl}${target}`)
             } else if (forwardedHost) {
                 return NextResponse.redirect(`https://${forwardedHost}${target}`)
             } else {

@@ -67,7 +67,17 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     }
 
     if (!isAuthenticated) {
-        return null; // The auth context or middleware will handle the push
+        return (
+            <div className="min-h-screen bg-background flex flex-col items-center justify-center relative overflow-hidden">
+                <div className="absolute inset-0 premium-gradient opacity-5" />
+                <div className="relative z-10 flex flex-col items-center gap-6">
+                    <div className="w-12 h-12 border-4 border-primary/30 border-t-primary animate-spin rounded-full" />
+                    <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground">
+                        Redirecting to Login
+                    </div>
+                </div>
+            </div>
+        );
     }
 
 

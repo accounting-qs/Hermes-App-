@@ -14,6 +14,7 @@ interface InviteUserModalProps {
 }
 
 export function InviteUserModal({ isOpen, onClose, onSuccess }: InviteUserModalProps) {
+    const toast = useToast();
     const [isLoading, setIsLoading] = useState(false);
     const [brands, setBrands] = useState<Brand[]>([]);
     const [primaryRole, setPrimaryRole] = useState<'qs_team' | 'client'>('qs_team');

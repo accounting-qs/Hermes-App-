@@ -16,7 +16,7 @@ import { OfferArchitect } from '@/components/brands/offers/OfferArchitect';
 
 export default function OffersPage() {
     const { id } = useParams();
-    const brandId = Array.isArray(id) ? id[0] : id;
+    const brandId = (Array.isArray(id) ? id[0] : id) || '';
     const supabase = createClient();
 
     // State
