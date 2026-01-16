@@ -91,7 +91,7 @@
 
 @layer utilities {
   .premium-gradient {
-    background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+    @apply bg-gradient-to-r from-emerald-500 via-teal-500 to-primary shadow-lg shadow-emerald-500/20;
   }
 
   .premium-text-gradient {

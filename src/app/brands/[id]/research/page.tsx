@@ -1,281 +1,203 @@
-"use client";
-
-import React, { useState } from "react";
-import {
-    Building2,
-    Users2,
-    Frown,
-    FileSearch,
-    CheckCircle2,
-    Zap,
-    ArrowRight,
-    Sparkles,
-    ChevronDown,
-    Info,
-    Plus,
-    Smile
-} from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import { cn } from "@/lib/utils";
-import { useParams } from "next/navigation";
+import React, { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
+import { useResearchStore } from '@/store/useResearchStore';
+import { ResearchPhase } from '@/types/research';
+import { ResearchStepper } from '@/components/brands/research/ResearchStepper';
+import { MarketResearchForm } from '@/components/brands/research/MarketResearchForm';
+import { AvatarDiscoveryForm } from '@/components/brands/research/AvatarDiscoveryForm';
+import { PainsResearchForm } from '@/components/brands/research/PainsResearchForm';
+import { useResearchSync } from '@/hooks/useResearchSync';
+import { Search, Loader2, Sparkles } from 'lucide-react';
+import { createClient } from '@/lib/supabase-ssr/client';
+import { generateResearchReport } from '@/app/actions/generate-report';
+import { ReportViewer } from '@/components/brands/research/ReportViewer';
 
 export default function ResearchPage() {
     const { id } = useParams();
-    const [activeSection, setActiveSection] = useState<'market' | 'avatar' | 'pains'>('market');
+    const brandId = Array.isArray(id) ? id[0] : id;
 
-    const sections = [
-        { id: 'market', title: 'Market Research', icon: Building2, completion: 100 },
-        { id: 'avatar', title: 'Avatar Discovery', icon: Users2, completion: 85 },
-        { id: 'pains', title: 'Pains & Desires', icon: Frown, completion: 0 },
+    // Auto-Save Sync
+    useResearchSync(brandId); // This will listen to store changes
+
+    // Store
+    const {
+        currentSession,
+        setSession,
+        setLoading,
+        isLoading,
+        getPhaseProgress,
+        isPhaseLocked
+    } = useResearchStore();
+
+    // Local state for active phase in UI (synced with store but capable of navigation)
+    const [activePhase, setActivePhase] = React.useState<ResearchPhase>('market');
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [reportContent, setReportContent] = useState<string | null>(null);
+
+    // Fetch existing session or create specific logic would go here
+    useEffect(() => {
+        if (!brandId) return;
+
+        const initSession = async () => {
+            setLoading(true);
+            const supabase = createClient();
+
+            // Try fetch active session
+            const { data, error } = await supabase
+                .from('research_sessions')
+                .select('*')
+                .eq('brand_id', brandId)
+                // .eq('status', 'draft') // In strict mode we might filter drafts
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
+
+            if (data) {
+                setSession(data as any);
+                // Auto-navigate to latest incomplete phase? Logic for later.
+            } else {
+                // Create new placeholder in store (not DB yet until first save?)
+                // Or fetch empty state
+            }
+            setLoading(false);
+        };
+
+        initSession();
+    }, [brandId, setSession, setLoading]);
+
+    // Fetch existing report if session is completed
+    useEffect(() => {
+        if (!currentSession?.id) return;
+        if (currentSession.status === 'completed' && !reportContent) {
+            const fetchReport = async () => {
+                const supabase = createClient();
+                const { data } = await supabase
+                    .from('research_reports')
+                    .select('content')
+                    .eq('session_id', currentSession.id)
+                    .single();
+                if (data) setReportContent(data.content);
+            };
+            fetchReport();
+        }
+    }, [currentSession, reportContent]);
+
+    const handleGenerateReport = async () => {
+        if (!currentSession) return;
+        setIsGenerating(true);
+        try {
+            const result = await generateResearchReport(currentSession);
+            if (result.success && result.report) {
+                setReportContent(result.report.content);
+            } else {
+                alert("Failed to generate report. Please try again.");
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Error generating report.");
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    const phases = [
+        { id: 'market' as ResearchPhase, label: 'Market Research', progress: getPhaseProgress('market'), locked: false },
+        { id: 'avatar' as ResearchPhase, label: 'Avatar Discovery', progress: getPhaseProgress('avatar'), locked: isPhaseLocked('avatar') },
+        { id: 'pains' as ResearchPhase, label: 'Pains & Desires', progress: getPhaseProgress('pains'), locked: isPhaseLocked('pains') },
     ];
 
     return (
-        <div className="space-y-8 pb-12">
+        <div className="space-y-8 pb-12 animate-in fade-in duration-500">
             {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                <div>
-                    <div className="flex items-center gap-2 mb-1">
-                        <FileSearch className="w-5 h-5 text-primary" />
-                        <h1 className="text-3xl font-bold outfit-font">Research Hub</h1>
-                    </div>
-                    <p className="text-muted-foreground">Deep analysis of the business, audience, and market landscape.</p>
-                </div>
-
-                <button className="flex items-center gap-2 px-6 py-3 premium-gradient text-white rounded-xl font-bold shadow-xl shadow-primary/20 hover:scale-[1.02] transition-all">
-                    <Sparkles className="w-5 h-5" />
-                    Generate AI Summary
-                </button>
+            <div>
+                <h1 className="text-3xl font-bold outfit-font flex items-center gap-3">
+                    <Search className="w-8 h-8 text-primary" />
+                    Research Hub
+                </h1>
+                <p className="text-muted-foreground mt-1">
+                    Execute the sequential deep-dive to extract the core brand DNA.
+                </p>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                {/* Navigation Sidebar */}
-                <div className="lg:col-span-3 space-y-3">
-                    {sections.map((section) => (
-                        <button
-                            key={section.id}
-                            onClick={() => setActiveSection(section.id as any)}
-                            className={cn(
-                                "w-full flex items-center justify-between p-4 rounded-2xl border transition-all duration-300",
-                                activeSection === section.id
-                                    ? "bg-primary/10 border-primary/50 text-foreground shadow-lg shadow-primary/5"
-                                    : "bg-secondary/20 border-border/50 text-muted-foreground hover:border-border hover:bg-secondary/30"
-                            )}
-                        >
-                            <div className="flex items-center gap-3">
-                                <div className={cn(
-                                    "p-2 rounded-xl transition-colors",
-                                    activeSection === section.id ? "bg-primary text-white" : "bg-card text-muted-foreground"
-                                )}>
-                                    <section.icon className="w-5 h-5" />
-                                </div>
-                                <div className="text-left">
-                                    <div className="text-sm font-bold">{section.title}</div>
-                                    <div className="text-[10px] uppercase font-bold tracking-widest opacity-70">
-                                        {section.completion}% Complete
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="relative w-1.5 h-1.5 rounded-full overflow-hidden bg-secondary">
-                                <div
-                                    className="absolute top-0 left-0 h-full bg-primary"
-                                    style={{ height: `${section.completion}%` }}
-                                />
-                            </div>
-                        </button>
-                    ))}
+            {/* Stepper (Hide if report view?) */}
+            {!reportContent && (
+                <div className="max-w-3xl mx-auto py-6">
+                    <ResearchStepper
+                        currentPhase={activePhase}
+                        phases={phases}
+                        onPhaseChange={setActivePhase}
+                    />
+                </div>
+            )}
 
-                    <div className="p-6 glass-card bg-secondary/10 mt-8 border-dashed border-border/50 flex flex-col items-center gap-3 text-center">
-                        <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center">
-                            <Plus className="w-6 h-6 text-muted-foreground" />
+            {/* Main Main Area */}
+            <div className={`glass-card min-h-[400px] ${reportContent ? 'p-0 overflow-hidden' : 'p-8'} relative`}>
+                {(isLoading || isGenerating) ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm z-50 gap-4">
+                        <Loader2 className="w-12 h-12 animate-spin text-primary" />
+                        <div className="text-center space-y-2">
+                            <h3 className="text-lg font-bold animate-pulse">
+                                {isGenerating ? 'Synthesizing Intelligence...' : 'Loading Session...'}
+                            </h3>
+                            <p className="text-sm text-muted-foreground">
+                                {isGenerating ? 'Analyzing 50+ data points with Quantum AI' : 'Fetching your progress'}
+                            </p>
                         </div>
-                        <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Custom Research Section</div>
                     </div>
-                </div>
+                ) : reportContent ? (
+                    <ReportViewer initialContent={reportContent} />
+                ) : (
+                    <div className="max-w-3xl mx-auto">
+                        {activePhase === 'market' && <MarketResearchForm />}
 
-                {/* Form Content Area */}
-                <div className="lg:col-span-9">
-                    <AnimatePresence mode="wait">
-                        {activeSection === 'market' && (
-                            <motion.div
-                                key="market"
-                                initial={{ opacity: 0, x: 20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: -20 }}
-                                className="space-y-6"
-                            >
-                                <div className="glass-card p-8 border-border/50">
-                                    <div className="flex items-center justify-between mb-8 pb-4 border-b border-border/50">
-                                        <div>
-                                            <h2 className="text-xl font-bold">Market Analysis</h2>
-                                            <p className="text-sm text-muted-foreground">Define the company's core positioning and industry context.</p>
-                                        </div>
-                                        <div className="flex items-center gap-2 px-3 py-1 bg-green-500/10 text-green-500 rounded-full border border-green-500/20 text-[10px] font-bold uppercase tracking-widest">
-                                            <CheckCircle2 className="w-3 h-3" />
-                                            Complete
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                                                Company Name
-                                                <Info className="w-3 h-3" />
-                                            </label>
-                                            <input
-                                                type="text"
-                                                defaultValue="Quantum Scale Agency"
-                                                className="w-full bg-secondary/50 border border-border/50 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all font-medium"
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Industry</label>
-                                            <input
-                                                type="text"
-                                                defaultValue="Marketing Automation"
-                                                className="w-full bg-secondary/50 border border-border/50 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all font-medium"
-                                            />
-                                        </div>
-                                        <div className="md:col-span-2 space-y-2">
-                                            <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Core Transformation (Mission)</label>
-                                            <textarea
-                                                rows={3}
-                                                defaultValue="Helping service-based agencies scale to $1M ARR via automated webinar ecosystems that consistently book high-ticket calls."
-                                                className="w-full bg-secondary/50 border border-border/50 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all font-medium resize-none"
-                                            />
-                                            <div className="flex justify-end">
-                                                <button className="flex items-center gap-1.5 text-[10px] text-primary font-bold hover:underline">
-                                                    <Zap className="w-3 h-3" />
-                                                    AI Enhance
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="mt-12 space-y-6">
-                                        <h3 className="text-sm font-bold uppercase tracking-widest text-primary flex items-center gap-2">
-                                            Ideal Customer Profile (ICP)
-                                            <div className="flex-1 h-px bg-primary/20" />
-                                        </h3>
-
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                            {['Agency Owners', 'Coaches', 'Course Creators', 'B2B Sales Teams'].map((profile) => (
-                                                <div key={profile} className="flex items-center justify-between p-3 bg-card border border-border/50 rounded-xl group hover:border-primary/50 transition-all">
-                                                    <span className="text-sm font-medium">{profile}</span>
-                                                    <button className="p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                                                    </button>
-                                                </div>
-                                            ))}
-                                            <button className="flex items-center justify-center gap-2 p-3 border-2 border-dashed border-border/50 rounded-xl text-xs font-bold text-muted-foreground hover:text-primary hover:border-primary/50 transition-all">
-                                                <Plus className="w-4 h-4" />
-                                                Add ICP Group
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <div className="mt-12 flex justify-between pt-8 border-t border-border/50">
-                                        <button className="px-6 py-3 bg-secondary/50 hover:bg-secondary rounded-xl text-sm font-bold transition-all disabled:opacity-50">
-                                            Save Draft
-                                        </button>
-                                        <button
-                                            onClick={() => setActiveSection('avatar')}
-                                            className="px-8 py-3 bg-primary text-white rounded-xl text-sm font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all flex items-center gap-2"
-                                        >
-                                            Next Section: Avatar
-                                            <ArrowRight className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                </div>
-                            </motion.div>
+                        {activePhase === 'avatar' && (
+                            // locked check should technically happen in Stepper/Store but safeguarding here
+                            // For now assuming visual lock prevents click
+                            <AvatarDiscoveryForm />
+                        )}
+                        {activePhase === 'pains' && (
+                            <div className="text-center p-12 text-muted-foreground">
+                                Pains & Desires Form Coming Soon (Locked)
+                            </div>
                         )}
 
-                        {activeSection === 'avatar' && (
-                            <motion.div
-                                key="avatar"
-                                initial={{ opacity: 0, x: 20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: -20 }}
-                                className="space-y-6"
-                            >
-                                <div className="glass-card p-8 border-border/50">
-                                    <div className="flex items-center justify-between mb-8 pb-4 border-b border-border/50">
-                                        <div>
-                                            <h2 className="text-xl font-bold">Avatar Profile</h2>
-                                            <p className="text-sm text-muted-foreground">Who is the primary decision maker?</p>
-                                        </div>
-                                    </div>
+                        {/* Navigation Actions */}
+                        <div className="mt-12 flex justify-between pt-6 border-t border-border">
+                            {activePhase !== 'market' ? (
+                                <button
+                                    onClick={() => {
+                                        if (activePhase === 'avatar') setActivePhase('market');
+                                        if (activePhase === 'pains') setActivePhase('avatar');
+                                    }}
+                                    className="px-6 py-2 text-muted-foreground hover:text-foreground transition-colors"
+                                >
+                                    Back
+                                </button>
+                            ) : <div />}
 
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Avatar Name</label>
-                                            <input type="text" placeholder="e.g. Agency Owner Adam" className="w-full bg-secondary/50 border border-border/50 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-1 focus:ring-primary font-medium" />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Core Motivation</label>
-                                            <input type="text" placeholder="e.g. Freedom, Status, Scale" className="w-full bg-secondary/50 border border-border/50 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-1 focus:ring-primary font-medium" />
-                                        </div>
-                                        <div className="md:col-span-2 space-y-2">
-                                            <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Current Situation (Status Quo)</label>
-                                            <textarea rows={2} placeholder="Where are they right now?" className="w-full bg-secondary/50 border border-border/50 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-1 focus:ring-primary font-medium resize-none" />
-                                        </div>
-                                        <div className="md:col-span-2 space-y-2">
-                                            <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Goal Situation (Paradise)</label>
-                                            <textarea rows={2} placeholder="Where do they want to be?" className="w-full bg-secondary/50 border border-border/50 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-1 focus:ring-primary font-medium resize-none" />
-                                        </div>
-                                    </div>
-
-                                    <div className="mt-8 flex justify-between">
-                                        <button onClick={() => setActiveSection('market')} className="px-6 py-3 border border-border rounded-xl text-sm font-bold hover:bg-secondary transition-all">Previous</button>
-                                        <button onClick={() => setActiveSection('pains')} className="px-8 py-3 bg-primary text-white rounded-xl text-sm font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all">Next: Pains & Desires</button>
-                                    </div>
-                                </div>
-                            </motion.div>
-                        )}
-
-                        {activeSection === 'pains' && (
-                            <motion.div
-                                key="pains"
-                                initial={{ opacity: 0, x: 20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: -20 }}
-                                className="space-y-6"
-                            >
-                                <div className="glass-card p-8 border-border/50">
-                                    <h2 className="text-xl font-bold mb-8">Pains & Desires</h2>
-
-                                    <div className="space-y-8">
-                                        <div className="p-6 bg-red-500/5 border border-red-500/20 rounded-3xl">
-                                            <h3 className="text-sm font-bold uppercase text-red-500 mb-4 flex items-center gap-2">
-                                                <Frown className="w-4 h-4" />
-                                                Core Pains
-                                            </h3>
-                                            <div className="space-y-4">
-                                                <input type="text" placeholder="Pain 1: e.g. Leads are too expensive" className="w-full bg-background border border-border/50 rounded-xl py-3 px-4 text-sm" />
-                                                <input type="text" placeholder="Pain 2: e.g. Sales cycle is too long" className="w-full bg-background border border-border/50 rounded-xl py-3 px-4 text-sm" />
-                                            </div>
-                                        </div>
-
-                                        <div className="p-6 bg-green-500/5 border border-green-500/20 rounded-3xl">
-                                            <h3 className="text-sm font-bold uppercase text-green-500 mb-4 flex items-center gap-2">
-                                                <Smile className="w-4 h-4" />
-                                                Deepest Desires
-                                            </h3>
-                                            <div className="space-y-4">
-                                                <input type="text" placeholder="Desire 1: e.g. Completely automated acquisition" className="w-full bg-background border border-border/50 rounded-xl py-3 px-4 text-sm" />
-                                                <input type="text" placeholder="Desire 2: e.g. Reaching $100k months" className="w-full bg-background border border-border/50 rounded-xl py-3 px-4 text-sm" />
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="mt-12 pt-8 border-t border-border/50 flex justify-between">
-                                        <button onClick={() => setActiveSection('avatar')} className="px-6 py-3 border border-border rounded-xl text-sm font-bold hover:bg-secondary transition-all">Previous</button>
-                                        <button className="px-8 py-3 premium-gradient text-white rounded-xl text-sm font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all">Finish Research</button>
-                                    </div>
-                                </div>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                </div>
+                            {activePhase !== 'pains' ? (
+                                <button
+                                    onClick={() => {
+                                        if (activePhase === 'market') setActivePhase('avatar');
+                                        if (activePhase === 'avatar') setActivePhase('pains');
+                                    }}
+                                    className="px-8 py-3 bg-secondary text-primary rounded-xl font-bold hover:bg-secondary/80 transition-all"
+                                >
+                                    Next Phase
+                                </button>
+                            ) : (
+                                <button
+                                    className="px-8 py-3 premium-gradient text-white rounded-xl font-bold shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 transition-all flex items-center gap-2"
+                                    onClick={handleGenerateReport}
+                                    disabled={isGenerating}
+                                >
+                                    <Sparkles className="w-4 h-4" />
+                                    Generate Research Report
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

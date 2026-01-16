@@ -1,245 +1,209 @@
 "use client";
 
-import React, { useState } from "react";
-import {
-    File,
-    Link as LinkIcon,
-    Image as ImageIcon,
-    StickyNote,
-    Plus,
-    Upload,
-    Globe,
-    MoreVertical,
-    Download,
-    Trash2,
-    ExternalLink,
-    Sparkles,
-    Info
-} from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import { cn } from "@/lib/utils";
-import { useParams } from "next/navigation";
+import React, { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
+import { createClient } from '@/lib/supabase-ssr/client';
+import { BrandResource, ResourceType } from '@/types';
+import { FileUploader } from '@/components/brands/resources/FileUploader';
+import { ResourceList } from '@/components/brands/resources/ResourceList';
+import { ResourceStats } from '@/components/brands/resources/ResourceStats';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'; // Assuming we have shadcn tabs or standard
+import { BookOpen, Link as LinkIcon, Image as ImageIcon, FileText, Plus, Loader2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useBrandStore } from '@/store/useBrandStore';
+
+// Temporary simplistic Tabs if shadcn not installed yet, but user asked for Radix. 
+// I'll implement a custom Tab wrapper to ensure it works without shadcn dependency for now, 
+// using generic logic or assuming standard UI components exist.
+// Since User requested Radix, I installed radix-ui/react-tabs earlier.
+
+import * as TabsPrimitive from '@radix-ui/react-tabs';
+
+const CustomTabs = TabsPrimitive.Root;
+const CustomTabsList = React.forwardRef<
+    React.ElementRef<typeof TabsPrimitive.List>,
+    React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>
+>(({ className, ...props }, ref) => (
+    <TabsPrimitive.List
+        ref={ref}
+        className={cn(
+            "inline-flex h-12 items-center justify-center rounded-2xl bg-secondary/50 p-1 text-muted-foreground",
+            className
+        )}
+        {...props}
+    />
+));
+CustomTabsList.displayName = TabsPrimitive.List.displayName;
+
+const CustomTabsTrigger = React.forwardRef<
+    React.ElementRef<typeof TabsPrimitive.Trigger>,
+    React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger>
+>(({ className, ...props }, ref) => (
+    <TabsPrimitive.Trigger
+        ref={ref}
+        className={cn(
+            "inline-flex items-center justify-center whitespace-nowrap rounded-xl px-6 py-2.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:font-bold",
+            className
+        )}
+        {...props}
+    />
+));
+CustomTabsTrigger.displayName = TabsPrimitive.Trigger.displayName;
+
+const CustomTabsContent = React.forwardRef<
+    React.ElementRef<typeof TabsPrimitive.Content>,
+    React.ComponentPropsWithoutRef<typeof TabsPrimitive.Content>
+>(({ className, ...props }, ref) => (
+    <TabsPrimitive.Content
+        ref={ref}
+        className={cn(
+            "mt-6 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 animate-in fade-in slide-in-from-bottom-2 duration-300",
+            className
+        )}
+        {...props}
+    />
+));
+CustomTabsContent.displayName = TabsPrimitive.Content.displayName;
 
 export default function ResourcesPage() {
     const { id } = useParams();
-    const [activeTab, setActiveTab] = useState<'files' | 'links' | 'assets' | 'notes'>('files');
+    const brandId = Array.isArray(id) ? id[0] : id;
+    const [resources, setResources] = useState<BrandResource[]>([]);
+    const [loading, setLoading] = useState(true);
+    const supabase = createClient();
+    const { brands } = useBrandStore();
+    const brand = brands.find(b => b.id === brandId);
 
-    const tabs = [
-        { id: 'files', title: 'Files', icon: File },
-        { id: 'links', title: 'Links', icon: LinkIcon },
-        { id: 'assets', title: 'Assets', icon: ImageIcon },
-        { id: 'notes', title: 'Notes', icon: StickyNote },
-    ];
+    const fetchResources = async () => {
+        if (!brandId) return;
+        setLoading(true);
+        const { data, error } = await supabase
+            .from('brand_resources')
+            .select('*')
+            .eq('brand_id', brandId)
+            .order('created_at', { ascending: false });
+
+        if (data) setResources(data as BrandResource[]);
+        setLoading(false);
+    };
+
+    useEffect(() => {
+        fetchResources();
+    }, [brandId]);
+
+    const [urlInput, setUrlInput] = useState("");
+    const [isAddingLink, setIsAddingLink] = useState(false);
+
+    const handleAddLink = async () => {
+        if (!urlInput || !brandId) return;
+        setIsAddingLink(true);
+        try {
+            const { crawlLink } = await import('@/app/actions/crawl-link');
+            const { processResource } = await import('@/app/actions/process-resource');
+
+            const content = await crawlLink(urlInput);
+
+            // 1. Create Link Resource
+            const { data: newLink, error: linkError } = await supabase
+                .from('brand_resources')
+                .insert({
+                    brand_id: brandId,
+                    type: 'link',
+                    title: urlInput.replace(/^https?:\/\//, '').split('/')[0],
+                    content_text: content,
+                    metadata: { status: 'indexing' }
+                })
+                .select('id')
+                .single();
+
+            if (linkError) throw linkError;
+
+            // 2. Trigger Processing
+            await processResource(newLink.id);
+
+            setUrlInput("");
+            fetchResources();
+        } catch (err) {
+            console.error(err);
+            alert("Failed to add link");
+        } finally {
+            setIsAddingLink(false);
+        }
+    };
+
+    const filterByType = (type: ResourceType) => resources.filter(r => r.type === type);
 
     return (
         <div className="space-y-8 pb-12">
-            {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                 <div>
-                    <div className="flex items-center gap-2 mb-1">
-                        <LinkIcon className="w-5 h-5 text-primary" />
-                        <h1 className="text-3xl font-bold outfit-font">Resources</h1>
-                    </div>
-                    <p className="text-muted-foreground">Central knowledge base and brand assets for AI training.</p>
-                </div>
-
-                <div className="flex items-center gap-3">
-                    <button className="flex items-center gap-2 px-4 py-2 bg-secondary/50 hover:bg-secondary border border-border/50 rounded-xl text-sm font-bold transition-all">
-                        <Upload className="w-4 h-4" />
-                        Upload File
-                    </button>
-                    <button className="flex items-center gap-2 px-6 py-2 premium-gradient text-white rounded-xl text-sm font-bold shadow-lg shadow-primary/20">
-                        <Plus className="w-4 h-4" />
-                        Add Resource
-                    </button>
+                    <h1 className="text-3xl font-bold outfit-font flex items-center gap-3">
+                        <BookOpen className="w-8 h-8 text-primary" />
+                        Brand Resources
+                    </h1>
+                    <p className="text-muted-foreground mt-1">
+                        Manage the knowledge base for {brand?.name || 'this brand'}. Upload documents to train the AI.
+                    </p>
                 </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                {/* Main Content Area */}
-                <div className="lg:col-span-8 space-y-6">
-                    {/* Tabs */}
-                    <div className="flex items-center gap-2 p-1 bg-secondary/30 border border-border/50 rounded-2xl w-fit">
-                        {tabs.map((tab) => (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id as any)}
-                                className={cn(
-                                    "flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all",
-                                    activeTab === tab.id ? "bg-card text-primary shadow-lg" : "text-muted-foreground hover:text-foreground"
-                                )}
-                            >
-                                <tab.icon className="w-4 h-4" />
-                                {tab.title}
-                            </button>
-                        ))}
-                    </div>
+                {/* Main Content: Tabs */}
+                <div className="lg:col-span-8">
+                    <CustomTabs defaultValue="files" className="w-full">
+                        <CustomTabsList className="w-full justify-start overflow-x-auto">
+                            <CustomTabsTrigger value="files" className="flex items-center gap-2">
+                                <FileText className="w-4 h-4" /> Documents
+                            </CustomTabsTrigger>
+                            <CustomTabsTrigger value="links" className="flex items-center gap-2">
+                                <LinkIcon className="w-4 h-4" /> Links
+                            </CustomTabsTrigger>
+                            <CustomTabsTrigger value="assets" className="flex items-center gap-2">
+                                <ImageIcon className="w-4 h-4" /> Brand Assets
+                            </CustomTabsTrigger>
+                        </CustomTabsList>
 
-                    {/* Tab Content */}
-                    <AnimatePresence mode="wait">
-                        {activeTab === 'files' && (
-                            <motion.div
-                                key="files"
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -10 }}
-                                className="space-y-4"
-                            >
-                                <div className="glass-card overflow-hidden border-border/50">
-                                    <table className="w-full text-left">
-                                        <thead className="bg-secondary/30 border-b border-border/50">
-                                            <tr>
-                                                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">File Name</th>
-                                                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Category</th>
-                                                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Size</th>
-                                                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Tokens</th>
-                                                <th className="px-6 py-4 text-right"></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-border/50">
-                                            {[
-                                                { name: "Brand-Guidelines-2024.pdf", cat: "Branding", size: "2.5 MB", tokens: "1.2k" },
-                                                { name: "Sales-Deck-Draft.pptx", cat: "Sales", size: "12.0 MB", tokens: "4.5k" },
-                                                { name: "Client-Testimonials.docx", cat: "Proof", size: "850 KB", tokens: "2.1k" },
-                                            ].map((file, i) => (
-                                                <tr key={i} className="hover:bg-secondary/10 transition-all group">
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="p-2 rounded-lg bg-red-500/10 text-red-500">
-                                                                <File className="w-4 h-4" />
-                                                            </div>
-                                                            <span className="font-bold text-sm tracking-tight">{file.name}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <span className="px-2 py-1 rounded bg-secondary text-[10px] font-bold uppercase tracking-widest border border-border/50">
-                                                            {file.cat}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-xs text-muted-foreground italic">{file.size}</td>
-                                                    <td className="px-6 py-4 font-mono text-[10px] text-primary font-bold">{file.tokens}</td>
-                                                    <td className="px-6 py-4 text-right">
-                                                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <button className="p-2 text-muted-foreground hover:text-foreground">
-                                                                <Download className="w-4 h-4" />
-                                                            </button>
-                                                            <button className="p-2 text-muted-foreground hover:text-destructive">
-                                                                <Trash2 className="w-4 h-4" />
-                                                            </button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </motion.div>
-                        )}
+                        <CustomTabsContent value="files" className="space-y-6">
+                            <FileUploader onUploadComplete={fetchResources} />
+                            <div className="space-y-3">
+                                <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Uploaded Documents</h3>
+                                <ResourceList resources={filterByType('file')} onDelete={fetchResources} />
+                            </div>
+                        </CustomTabsContent>
 
-                        {activeTab === 'links' && (
-                            <motion.div
-                                key="links"
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -10 }}
-                                className="grid grid-cols-1 md:grid-cols-2 gap-4"
-                            >
-                                {[
-                                    { label: "Company Website", url: "https://quantumscale.ai", type: "Website", status: "Scraped" },
-                                    { label: "LinkedIn Company", url: "linkedin.com/company/qs", type: "Social", status: "Scraped" },
-                                    { label: "Lead Magnets", url: "https://hub.qs.ai/leads", type: "App", status: "Pending" },
-                                ].map((link, i) => (
-                                    <div key={i} className="glass-card p-5 hover:border-primary/50 transition-all">
-                                        <div className="flex items-start justify-between mb-4">
-                                            <div className="p-3 bg-secondary rounded-2xl">
-                                                <Globe className="w-6 h-6 text-primary" />
-                                            </div>
-                                            <div className={cn(
-                                                "text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border",
-                                                link.status === 'Scraped' ? "bg-green-500/10 text-green-500 border-green-500/20" : "bg-amber-500/10 text-amber-500 border-amber-500/20"
-                                            )}>
-                                                {link.status}
-                                            </div>
-                                        </div>
-                                        <div className="space-y-1 mb-4">
-                                            <div className="text-sm font-bold">{link.label}</div>
-                                            <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                                {link.url} <ExternalLink className="w-3 h-3" />
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <button className="flex-1 py-1.5 bg-secondary hover:bg-secondary/80 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all">
-                                                Edit Link
-                                            </button>
-                                            <button className="p-1.5 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-lg transition-all">
-                                                <Sparkles className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </motion.div>
-                        )}
+                        <CustomTabsContent value="links" className="space-y-6">
+                            <div className="glass-card p-4 flex gap-3">
+                                <input
+                                    type="text"
+                                    value={urlInput}
+                                    onChange={(e) => setUrlInput(e.target.value)}
+                                    placeholder="Paste URL to index (e.g., https://example.com)..."
+                                    className="flex-1 bg-background border border-border rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-primary/50 outline-none"
+                                    disabled={isAddingLink}
+                                />
+                                <button
+                                    onClick={handleAddLink}
+                                    disabled={isAddingLink || !urlInput}
+                                    className="px-4 py-2 premium-gradient text-white rounded-xl font-bold text-sm flex items-center gap-2 disabled:opacity-50"
+                                >
+                                    {isAddingLink ? <Loader2 className="w-4 h-4 animate-spin" /> : "Add Link"}
+                                </button>
+                            </div>
+                            <ResourceList resources={filterByType('link')} onDelete={fetchResources} />
+                        </CustomTabsContent>
 
-                        {/* Notes & Assets would go here similarly */}
-                    </AnimatePresence>
+                        <CustomTabsContent value="assets" className="space-y-6">
+                            <div className="p-12 border border-dashed border-border rounded-xl text-center text-muted-foreground">
+                                Asset Manager Coming Soon
+                            </div>
+                            <ResourceList resources={filterByType('asset')} onDelete={fetchResources} />
+                        </CustomTabsContent>
+                    </CustomTabs>
                 </div>
 
-                {/* Knowledge Base Info Sidebar */}
-                <div className="lg:col-span-4 space-y-6">
-                    <div className="glass-card p-6 bg-primary/5 border-primary/20">
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className="p-2 rounded-xl bg-primary text-white">
-                                <Sparkles className="w-5 h-5" />
-                            </div>
-                            <h2 className="text-sm font-bold uppercase tracking-widest">AI Context Stats</h2>
-                        </div>
-
-                        <div className="space-y-6">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="p-4 bg-card border border-border/50 rounded-2xl">
-                                    <div className="text-xl font-bold">18.5k</div>
-                                    <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">Total Tokens</div>
-                                </div>
-                                <div className="p-4 bg-card border border-border/50 rounded-2xl">
-                                    <div className="text-xl font-bold">12</div>
-                                    <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">Data Sources</div>
-                                </div>
-                            </div>
-
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between text-xs font-bold uppercase tracking-widest">
-                                    <span>Knowledge Coverage</span>
-                                    <span className="text-primary">82%</span>
-                                </div>
-                                <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
-                                    <div className="h-full premium-gradient" style={{ width: '82%' }} />
-                                </div>
-                            </div>
-
-                            <div className="p-4 bg-secondary/30 rounded-2xl border border-border/50 flex gap-3 italic text-xs text-muted-foreground">
-                                <Info className="w-4 h-4 shrink-0 text-primary" />
-                                <span>The AI Copilot uses these resources to generate brand-aligned copy and offers.</span>
-                            </div>
-
-                            <button className="w-full py-3 premium-gradient text-white font-bold rounded-xl shadow-lg shadow-primary/20 transition-all hover:scale-[1.02]">
-                                Re-sync AI Knowledge
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="glass-card p-6">
-                        <h2 className="text-sm font-bold uppercase tracking-widest mb-4">Quick Add Link</h2>
-                        <div className="space-y-3">
-                            <input
-                                type="text"
-                                placeholder="https://paste-link-here.com"
-                                className="w-full bg-secondary/50 border border-border/50 rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                            />
-                            <button className="w-full py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary/90 transition-all">
-                                Crawl Link
-                            </button>
-                        </div>
-                    </div>
+                {/* Sidebar: Stats */}
+                <div className="lg:col-span-4">
+                    <ResourceStats resources={resources} />
                 </div>
             </div>
         </div>

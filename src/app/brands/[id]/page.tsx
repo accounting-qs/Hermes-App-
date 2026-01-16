@@ -1,50 +1,129 @@
 "use client";
 
-import React from "react";
-import {
-    BarChart3,
-    Search,
-    Target,
-    Video,
-    BookOpen,
-    Truck,
-    Settings2,
-    ArrowUpRight,
-    Clock,
-    CheckCircle2,
-    Circle,
-    MoreHorizontal
-} from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import { useBrandStore } from "@/store/useBrandStore";
 import { useAuthStore } from "@/store/useAuthStore";
-import { useParams } from "next/navigation";
-import { motion } from "framer-motion";
-import { cn } from "@/lib/utils";
-import Link from "next/link";
+import { createClient } from "@/lib/supabase-ssr/client";
+import { StrategicRoadmap } from "@/components/brands/overview/StrategicRoadmap";
+import { ModuleStatusGrid, ModuleStatus } from "@/components/brands/overview/ModuleStatusGrid";
+import { ActivityFeed } from "@/components/brands/overview/ActivityFeed";
+import { QuantumPulse, AIFlashSummary } from "@/components/brands/overview/IntelligenceComponents";
+import { BookOpen, Search, Target, Video, Truck, Library } from "lucide-react"; // Import necessary icons
+
+// Define Activity Interface manually to match component expectation
+interface ActivityItem {
+    id: string;
+    action_type: string;
+    category: string;
+    description: string;
+    created_at: string;
+}
 
 export default function BrandOverviewPage() {
     const { id } = useParams();
     const { brands } = useBrandStore();
-    const brand = brands.find(b => b.id === id);
+    const { user } = useAuthStore(); // Check for role later if needed
+    const supabase = createClient();
 
-    if (!brand) return <div>Brand not found</div>;
+    // Convert 'id' to string safely
+    const brandId = Array.isArray(id) ? id[0] : id;
+    const brand = brands.find(b => b.id === brandId);
 
-    const modules = [
-        { id: 'resources', title: "Resources", icon: BookOpen, progress: 100, status: 'Complete' },
-        { id: 'research', title: "Research", icon: Search, progress: brand.progress?.research || 0, status: (brand.progress?.research || 0) === 100 ? 'Complete' : 'In Progress' },
-        { id: 'offers', title: "Offers", icon: Target, progress: brand.progress?.offers || 0, status: (brand.progress?.offers || 0) === 100 ? 'Complete' : 'In Progress' },
-        { id: 'webinar', title: "Webinar", icon: Video, progress: brand.progress?.webinar || 0, status: (brand.progress?.webinar || 0) === 100 ? 'Complete' : 'In Progress' },
+    // Local State for New Data
+    const [activities, setActivities] = useState<ActivityItem[]>([]);
+    const [pulseScore, setPulseScore] = useState(0);
+    const [flashSummary, setFlashSummary] = useState("");
+    const [loading, setLoading] = useState(true);
+
+    // Initial Data Fetch
+    useEffect(() => {
+        if (!brandId) return;
+
+        const fetchData = async () => {
+            setLoading(true);
+            try {
+                // Fetch Activity Log
+                const { data: logs } = await supabase
+                    .from('brand_activity_log')
+                    .select('*')
+                    .eq('brand_id', brandId)
+                    .order('created_at', { ascending: false })
+                    .limit(5);
+
+                if (logs) setActivities(logs as ActivityItem[]);
+
+                // Fetch Summary & Pulse
+                const { data: summary } = await supabase
+                    .from('brand_summaries')
+                    .select('*')
+                    .eq('brand_id', brandId)
+                    .single();
+
+                if (summary) {
+                    setPulseScore(summary.pulse_score || 0);
+                    setFlashSummary(summary.flash_summary || "");
+                }
+
+                // Note: Milestones fetching could go here to calculate module progress accurately
+                // For now, falling back to brand.progress or 0
+
+            } catch (error) {
+                console.error("Error fetching overview data:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchData();
+
+        // Real-time Subscription for Activity Log
+        const channel = supabase
+            .channel(`overview-${brandId}`)
+            .on(
+                'postgres_changes',
+                { event: 'INSERT', schema: 'public', table: 'brand_activity_log', filter: `brand_id=eq.${brandId}` },
+                (payload) => {
+                    const newLog = payload.new as ActivityItem;
+                    setActivities(prev => [newLog, ...prev].slice(0, 5));
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [brandId, supabase]);
+
+    if (!brand) return <div className="p-8 text-center">Brand not found</div>;
+
+    // Hardcode generic progress for now while backend populates
+    // In real scenario, this comes from 'brand_milestones' or aggregated table
+    // Research is manually segmented for demo: Market (33%), Avatar (33%), Pains (33%) 
+    // If brand.progress.research is e.g. 50, we split it.
+    const researchProg = brand.progress?.research || 0;
+
+    const modules: ModuleStatus[] = [
+        { id: 'resources', title: "Resources", icon: Library, progress: 100, status: 'Complete' },
+        {
+            id: 'research',
+            title: "Research",
+            icon: Search,
+            progress: researchProg,
+            status: researchProg === 100 ? 'Complete' : 'In Progress',
+            subProgress: [Math.min(researchProg, 33) * 3, Math.max(0, Math.min(researchProg - 33, 33)) * 3, Math.max(0, researchProg - 66) * 3]
+        },
+        { id: 'offers', title: "Offers", icon: Target, progress: brand.progress?.offers || 0, status: (brand.progress?.offers || 0) > 0 ? 'In Progress' : 'Not Started' },
+        { id: 'webinar', title: "Webinar", icon: Video, progress: brand.progress?.webinar || 0, status: 'Not Started' },
         { id: 'workbook', title: "Workbook", icon: BookOpen, progress: 0, status: 'Not Started' },
-        { id: 'delivery', title: "Delivery", icon: Truck, progress: brand.progress?.delivery || 0, status: 'In Progress' },
+        { id: 'delivery', title: "Delivery", icon: Truck, progress: brand.progress?.delivery || 0, status: 'Not Started' },
     ];
 
-    const phases = ['Foundation', 'Messaging', 'Webinar Dev', 'Launch Prep', 'Running', 'Scaling'];
-    const brandPhase = brand.phase || 'foundation';
-    const currentPhaseIndex = phases.indexOf(brandPhase.charAt(0).toUpperCase() + brandPhase.slice(1));
+    const currentPhase = brand.phase || 'foundation';
 
     return (
-        <div className="space-y-8 pb-12">
-            {/* Brand Header */}
+        <div className="space-y-8 pb-12 animate-in fade-in duration-500">
+            {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                 <div className="flex items-center gap-6">
                     <div className="w-20 h-20 rounded-3xl premium-gradient flex items-center justify-center text-white text-3xl font-bold shadow-2xl shadow-primary/30">
@@ -57,7 +136,7 @@ export default function BrandOverviewPage() {
                                 {brand.status}
                             </span>
                         </div>
-                        <p className="text-muted-foreground mt-1">{brand.companyName} • {brand.industry}</p>
+                        <p className="text-muted-foreground mt-1">{brand.companyName || 'Company'} • {brand.industry || 'Industry'}</p>
                     </div>
                 </div>
 
@@ -65,136 +144,49 @@ export default function BrandOverviewPage() {
                     <button className="px-4 py-2 bg-secondary/50 hover:bg-secondary border border-border/50 rounded-xl text-sm font-bold transition-all">
                         Edit Brand
                     </button>
-                    <button className="px-6 py-2 premium-gradient text-white rounded-xl text-sm font-bold shadow-lg shadow-primary/20">
-                        Schedule Call
+                    <button className="px-6 py-2 premium-gradient text-white rounded-xl text-sm font-bold shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all">
+                        Manage Brand
                     </button>
                 </div>
             </div>
 
-            {/* Hero Stats & Progress */}
+            {/* Strategic Roadmap */}
+            <div className="glass-card p-8">
+                <h2 className="text-lg font-bold mb-6">Strategic Roadmap</h2>
+                <StrategicRoadmap currentPhase={currentPhase} />
+            </div>
+
+            {/* Main Grid Layout */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <div className="lg:col-span-8 glass-card p-8">
-                    <div className="flex items-center justify-between mb-8">
-                        <h2 className="text-xl font-bold">Program Progress</h2>
-                        <div className="text-sm font-bold text-primary">{brand.progress?.overall || 0}% Overall Completion</div>
-                    </div>
 
-                    {/* Phase Stepper */}
-                    <div className="relative mb-12">
-                        <div className="absolute top-1/2 left-0 w-full h-1 bg-secondary -translate-y-1/2 z-0" />
-                        <div
-                            className="absolute top-1/2 left-0 h-1 premium-gradient -translate-y-1/2 z-0 transition-all duration-1000"
-                            style={{ width: `${(currentPhaseIndex / (phases.length - 1)) * 100}%` }}
-                        />
-
-                        <div className="relative z-10 flex justify-between">
-                            {phases.map((phase, idx) => {
-                                const isActive = idx <= currentPhaseIndex;
-                                const isCurrent = idx === currentPhaseIndex;
-
-                                return (
-                                    <div key={phase} className="flex flex-col items-center gap-3">
-                                        <div className={cn(
-                                            "w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500",
-                                            isActive ? "premium-gradient text-white shadow-lg shadow-primary/30" : "bg-card border-2 border-border text-muted-foreground",
-                                            isCurrent && "ring-4 ring-primary/20 scale-110"
-                                        )}>
-                                            {isActive ? <CheckCircle2 className="w-5 h-5" /> : <div className="w-2 h-2 rounded-full bg-muted-foreground" />}
-                                        </div>
-                                        <span className={cn(
-                                            "text-[10px] font-bold uppercase tracking-widest",
-                                            isActive ? "text-foreground" : "text-muted-foreground"
-                                        )}>
-                                            {phase}
-                                        </span>
-                                    </div>
-                                );
-                            })}
+                {/* Left Column: Modules (8 cols) */}
+                <div className="lg:col-span-8 space-y-6">
+                    <div className="glass-card p-8">
+                        <div className="flex items-center justify-between mb-8">
+                            <h2 className="text-lg font-bold">Quantum Modules</h2>
                         </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {modules.map((mod) => (
-                            <Link
-                                href={`/brands/${id}/${mod.id}`}
-                                key={mod.id}
-                                className="p-4 bg-secondary/20 border border-border/50 rounded-2xl hover:border-primary/50 hover:bg-secondary/40 transition-all group"
-                            >
-                                <div className="flex items-center justify-between mb-4">
-                                    <div className="p-2 rounded-lg bg-primary/10 text-primary group-hover:bg-primary group-hover:text-white transition-all">
-                                        <mod.icon className="w-5 h-5" />
-                                    </div>
-                                    <div className={cn(
-                                        "text-[8px] font-bold uppercase tracking-tighter px-1.5 py-0.5 rounded border",
-                                        mod.status === 'Complete' ? "bg-green-500/10 text-green-500 border-green-500/20" :
-                                            mod.status === 'In Progress' ? "bg-amber-500/10 text-amber-500 border-amber-500/20" :
-                                                "bg-secondary text-muted-foreground border-border"
-                                    )}>
-                                        {mod.status}
-                                    </div>
-                                </div>
-                                <div className="space-y-1">
-                                    <div className="text-sm font-bold">{mod.title}</div>
-                                    <div className="flex items-center gap-2">
-                                        <div className="flex-1 h-1 bg-secondary rounded-full overflow-hidden">
-                                            <div className="h-full premium-gradient" style={{ width: `${mod.progress}%` }} />
-                                        </div>
-                                        <span className="text-[10px] font-bold">{mod.progress}%</span>
-                                    </div>
-                                </div>
-                            </Link>
-                        ))}
+                        <ModuleStatusGrid brandId={brandId} modules={modules} />
                     </div>
                 </div>
 
-                {/* Brand Summary Sidebar */}
+                {/* Right Column: Intelligence & Activity (4 cols) */}
                 <div className="lg:col-span-4 space-y-6">
-                    <div className="glass-card p-6">
-                        <h2 className="text-sm font-bold uppercase tracking-widest mb-6">Team Assignment</h2>
-                        <div className="space-y-4">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">CW</div>
-                                <div>
-                                    <div className="text-sm font-bold">Chris Welker</div>
-                                    <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">Lead Coach</div>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center text-muted-foreground font-bold italic">?</div>
-                                <div>
-                                    <div className="text-sm font-bold text-muted-foreground">None Assigned</div>
-                                    <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">Executive</div>
-                                </div>
-                            </div>
-                            <button className="w-full py-2 bg-secondary/50 hover:bg-secondary border border-border/50 rounded-lg text-xs font-bold transition-all mt-2">
-                                Manage Team
-                            </button>
+                    {/* Intelligence Card */}
+                    <div className="glass-card p-6 text-center">
+                        <QuantumPulse score={pulseScore} />
+                        <div className="mt-6">
+                            <AIFlashSummary summary={flashSummary} />
                         </div>
                     </div>
 
+                    {/* Activity Feed */}
                     <div className="glass-card p-6">
-                        <h2 className="text-sm font-bold uppercase tracking-widest mb-6">Recent Activity</h2>
-                        <div className="space-y-6">
-                            {[
-                                { action: "Offer Script updated", time: "2 hours ago", icon: Target },
-                                { action: "Research summary generated", time: "5 hours ago", icon: Search },
-                                { action: "Meeting notes uploaded", time: "Yesterday", icon: BookOpen },
-                            ].map((act, i) => (
-                                <div key={i} className="flex gap-4 relative">
-                                    {i !== 2 && <div className="absolute top-8 left-4 w-px h-6 bg-border" />}
-                                    <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center shrink-0">
-                                        <act.icon className="w-4 h-4 text-primary" />
-                                    </div>
-                                    <div className="space-y-0.5">
-                                        <div className="text-sm font-medium">{act.action}</div>
-                                        <div className="text-[10px] text-muted-foreground flex items-center gap-1">
-                                            <Clock className="w-3 h-3" />
-                                            {act.time}
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                        <h2 className="text-sm font-bold uppercase tracking-widest mb-6">Live Activity Log</h2>
+                        {loading ? (
+                            <div className="text-center text-xs text-muted-foreground">Loading feed...</div>
+                        ) : (
+                            <ActivityFeed activities={activities} />
+                        )}
                     </div>
                 </div>
             </div>
