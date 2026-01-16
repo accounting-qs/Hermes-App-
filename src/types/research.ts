@@ -1,180 +1,96 @@
 export type ResearchPhase = 'market' | 'avatar' | 'pains';
-export type ValidationStatus = 'idle' | 'validating' | 'valid' | 'invalid';
 
 export interface ValidationResult {
     isValid: boolean;
-    feedback?: string;
+    feedback: string;
     score?: number;
 }
 
-// --- Section 4: Case Study Blocks ---
-export interface CaseStudy {
-    id: string;
-    clientDescriptor: string; // "e.g., E-commerce SaaS founder"
-    startingSituation: string;
-    constraints: string;
-    intervention: string;
-    timeline: string;
-    measuredResults: string;
-    timeToValue: string;
-    roi: string;
-    clientQuote: string;
-    permissionStatus: 'granted' | 'requested' | 'strictly_anonymous';
-    artifacts?: string[]; // URLs
-}
-
-// --- Phase 1: Market Research (Refactored) ---
 export interface MarketResearchData {
-    // Section 1: Company Details
     companyDetails: {
-        promotionalName: string;
-        productName?: string;
-        primaryCTA: string;
-        yearsInBusiness: string;
-        clientsServed: string;
-        websites: string[]; // List of URLs
+        promotionalName?: string;
+        website?: string;
         mission: string;
         vision?: string;
         uniqueValueProposition: string;
     };
-
-    // Section 2: Target Audience & Apollo Filters
     targetAudience: {
-        description: string;
+        description?: string;
+        industries: string[];
+        companySize: string[];
+        roles: string[];
+        revenueRange: string;
         geography: string;
-        jobTitles: string[];
-        companyHeadcount: string[]; // ["1-10", "11-50", ...]
-        industryNames: string[];
-        companyKeywords: string[];
-        audienceQualifiers: string;
-        icpTiersExclusions: string;
-        seniorityLevels: string[];
-        revenueBrackets: string[];
     };
-
-    // Section 3: Unified Offer & Business Overview
     unifiedOffer: {
-        // A) Snapshot & Positioning
-        snapshot: {
-            elevatorPitch: string;
-            productType: string; // Single select
-            coreFeatures: string;
-        };
-        // B) Problem & Alternatives
-        problem: {
-            topPains: string;
-            urgencyStakes: string;
-            alternatives: string;
-        };
-        // C) Solution Mapping & Delivery
-        solution: {
-            mapping: string; // Solution per pain point
-            implementationPlan: string;
-            corePromise: string;
-            uspClaims: string;
-        };
-        // D) Benefits & Outcomes
-        outcomes: {
-            tangible: string;
-            intangible: string;
-            top3Outcomes: string;
-        };
-        // E) Offer Mechanics & Commercials
-        mechanics: {
-            priceStructure: string;
-            incentives: string;
-            riskReversal: string;
-            scarcityUrgency: string;
-        };
-        // F) Credibility & Proof
-        credibility: {
-            awards: string;
-            media: string;
-        };
+        corePromise: string;
+        pricingModel?: string;
+        deliverables: string;
     };
-
-    // Section 4: Case Study & Proof Builder
-    caseStudies: CaseStudy[];
+    competitors: {
+        direct: string[];
+        indirect: string[];
+    };
 }
 
-// --- Phase 2: Avatar Discovery ---
 export interface AvatarResearchData {
     demographics: {
-        ageRange: string;
-        genderSplit: string;
-        education: string;
+        ageRange?: string;
+        genderSplit?: string;
         occupation?: string;
         attitudes?: {
-            political?: string;
             social?: string;
-            economic?: string;
         };
     };
     innerNarrative: {
-        hopesAndDreams: string;
-        dailyRoutine: string;
-        victoriesAndFailures: string;
-        coreBeliefs: string;
-        secretFears: string;
+        hopesAndDreams?: string;
+        secretFears?: string;
+        victoriesAndFailures?: string;
     };
     marketExperience: {
-        currentSolutions: string;
-        likesAndDislikes: string;
-        horrorStories: string;
+        currentSolutions?: string;
+        horrorStories?: string;
     };
     curiosityAndCorruption: {
-        uniqueMechanisms: string;
-        corruptionEvents: string;
+        corruptionEvents?: string;
     };
 }
 
-// --- Phase 3: Pains & Desires ---
 export interface PainsResearchData {
     painPoints: {
-        foundational: string;
-        breakingPoint: string;
-        emotional: string;
+        foundational?: string;
+        breakingPoint?: string;
+        emotional?: string;
     };
     impactAnalysis: {
-        health: string;
-        relationships: string;
-        finances: string;
-        career: string;
+        health?: string;
+        relationships?: string;
+        finances?: string;
+        career?: string;
     };
     avoidanceAndTriggers: {
-        tolerations: string;
-        triggers: string;
-        relief: string;
+        tolerations?: string;
+        triggers?: string;
     };
     desiredFuture: {
-        idealOutcome: string;
-        dayToDay: string;
-        motivation: string;
-        legacy: string;
+        idealOutcome?: string;
+        dayToDay?: string;
+        motivation?: string;
+        legacy?: string;
     };
-    solutionPreferences: {
-        convenience: string;
-        delivery: string;
-    };
+    solutionPreferences?: any;
 }
 
-// --- Master Session Types ---
 export interface ResearchSession {
     id: string;
-    brand_id: string;
-    current_phase: ResearchPhase;
-    progress: {
-        market: number;
-        avatar: number;
-        pains: number;
-    };
+    brandId: string;
     data: {
-        market: Partial<MarketResearchData>;
-        avatar: Partial<AvatarResearchData>;
-        pains: Partial<PainsResearchData>;
+        market?: MarketResearchData;
+        avatar?: AvatarResearchData;
+        pains?: PainsResearchData;
     };
-    validation: Record<string, ValidationResult>;
+    report?: string;
     status: 'draft' | 'completed';
-    created_at: string;
-    updated_at: string;
+    current_phase?: ResearchPhase;
+    progress?: number;
 }

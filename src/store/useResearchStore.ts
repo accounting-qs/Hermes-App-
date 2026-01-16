@@ -1,23 +1,13 @@
 import { create } from 'zustand';
-import { ResearchSession, ResearchPhase, ValidationResult, CaseStudy } from '@/types/research';
+import { ResearchSession, ResearchPhase, ValidationResult } from '@/types/research';
 
 interface ResearchState {
     currentSession: ResearchSession | null;
     isLoading: boolean;
-    activeStep: number;
-
-    // Actions
     setSession: (session: ResearchSession) => void;
     updateFormData: (phase: ResearchPhase, path: string, value: any) => void;
     setValidationResult: (path: string, result: ValidationResult) => void;
     setLoading: (loading: boolean) => void;
-
-    // Array Helpers (Specific for repeatable blocks)
-    addCaseStudy: () => void;
-    removeCaseStudy: (index: number) => void;
-    updateCaseStudy: (index: number, field: keyof CaseStudy, value: any) => void;
-
-    // Computed/Helper
     getPhaseProgress: (phase: ResearchPhase) => number;
     isPhaseLocked: (phase: ResearchPhase) => boolean;
 }
@@ -25,25 +15,22 @@ interface ResearchState {
 export const useResearchStore = create<ResearchState>((set, get) => ({
     currentSession: null,
     isLoading: false,
-    activeStep: 0,
 
     setSession: (session) => set({ currentSession: session }),
-    setLoading: (loading) => set({ isLoading: loading }),
 
     updateFormData: (phase, path, value) => {
         set((state) => {
             if (!state.currentSession) return state;
 
-            const newData = { ...state.currentSession.data };
-            if (!newData[phase]) (newData as any)[phase] = {};
+            const newData = { ...state.currentSession.data } as any;
+            if (!newData[phase]) newData[phase] = {};
 
             const keys = path.split('.');
-            let current: any = newData[phase];
+            let current = newData[phase];
 
             for (let i = 0; i < keys.length - 1; i++) {
                 const key = keys[i];
                 if (!current[key]) current[key] = {};
-                current[key] = { ...current[key] }; // Shallow copy for immutability
                 current = current[key];
             }
 
@@ -58,116 +45,47 @@ export const useResearchStore = create<ResearchState>((set, get) => ({
         });
     },
 
-    addCaseStudy: () => {
-        set((state) => {
-            if (!state.currentSession) return state;
-            const market = state.currentSession.data.market || {};
-            const caseStudies = [...(market.caseStudies || [])];
-
-            const newCase: CaseStudy = {
-                id: Math.random().toString(36).substring(7),
-                clientDescriptor: '',
-                startingSituation: '',
-                constraints: '',
-                intervention: '',
-                timeline: '',
-                measuredResults: '',
-                timeToValue: '',
-                roi: '',
-                clientQuote: '',
-                permissionStatus: 'requested'
-            };
-
-            return {
-                currentSession: {
-                    ...state.currentSession,
-                    data: {
-                        ...state.currentSession.data,
-                        market: {
-                            ...market,
-                            caseStudies: [...caseStudies, newCase]
-                        }
-                    }
-                }
-            };
-        });
-    },
-
-    removeCaseStudy: (index) => {
-        set((state) => {
-            if (!state.currentSession) return state;
-            const market = state.currentSession.data.market || {};
-            const caseStudies = (market.caseStudies || []).filter((_, i) => i !== index);
-
-            return {
-                currentSession: {
-                    ...state.currentSession,
-                    data: {
-                        ...state.currentSession.data,
-                        market: {
-                            ...market,
-                            caseStudies
-                        }
-                    }
-                }
-            };
-        });
-    },
-
-    updateCaseStudy: (index, field, value) => {
-        set((state) => {
-            if (!state.currentSession) return state;
-            const market = state.currentSession.data.market || {};
-            const caseStudies = [...(market.caseStudies || [])];
-
-            if (caseStudies[index]) {
-                caseStudies[index] = { ...caseStudies[index], [field]: value };
-            }
-
-            return {
-                currentSession: {
-                    ...state.currentSession,
-                    data: {
-                        ...state.currentSession.data,
-                        market: {
-                            ...market,
-                            caseStudies
-                        }
-                    }
-                }
-            };
-        });
-    },
-
     setValidationResult: (path, result) => {
-        set((state) => {
-            if (!state.currentSession) return state;
-            return {
-                currentSession: {
-                    ...state.currentSession,
-                    validation: {
-                        ...state.currentSession.validation,
-                        [path]: result
+        // Placeholder for future validation feedback
+    },
+
+    setLoading: (loading) => set({ isLoading: loading }),
+
+    getPhaseProgress: (phase: ResearchPhase) => {
+        const state = get();
+        if (!state.currentSession?.data?.[phase]) return 0;
+
+        const data = state.currentSession.data[phase] as any;
+        let total = 0;
+        let filled = 0;
+
+        const countFields = (obj: any) => {
+            if (!obj || typeof obj !== 'object') return;
+
+            Object.values(obj).forEach(val => {
+                if (val && typeof val === 'object' && !Array.isArray(val)) {
+                    countFields(val);
+                } else {
+                    total++;
+                    if (val && (typeof val !== 'string' || val.trim().length > 0)) {
+                        filled++;
                     }
                 }
-            };
-        });
+            });
+        };
+
+        countFields(data);
+        return total === 0 ? 0 : Math.round((filled / total) * 100);
     },
 
-    getPhaseProgress: (phase) => {
-        const session = get().currentSession;
-        if (!session) return 0;
-        return session.progress[phase] || 0;
-    },
-
-    isPhaseLocked: (phase) => {
-        const session = get().currentSession;
-        if (!session) return true;
-
+    isPhaseLocked: (phase: ResearchPhase) => {
         if (phase === 'market') return false;
-        if (phase === 'avatar') return (session.progress.market || 0) < 100;
-        if (phase === 'pains') return (session.progress.avatar || 0) < 100;
 
-        return true;
+        const phases: ResearchPhase[] = ['market', 'avatar', 'pains'];
+        const idx = phases.indexOf(phase);
+        const prevPhase = phases[idx - 1];
+
+        // Lock if previous phase is less than 50% complete
+        return get().getPhaseProgress(prevPhase) < 50;
     }
 }));

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { validateInputWithAI, generateResearchContent } from '@/app/actions/quantum-guard';
+import { validateInputWithAI } from '@/app/actions/quantum-guard';
 import { Sparkles, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useResearchStore } from '@/store/useResearchStore';
@@ -11,8 +11,6 @@ interface QuantumInputProps extends React.TextareaHTMLAttributes<HTMLTextAreaEle
     fieldId: string; // strict path for store, e.g., 'market.companyDetails.mission'
     placeholder?: string;
     helperText?: string;
-    rows?: number;
-    onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
 }
 
 export const QuantumInput: React.FC<QuantumInputProps> = ({
@@ -21,32 +19,11 @@ export const QuantumInput: React.FC<QuantumInputProps> = ({
     className,
     helperText,
     onBlur,
-    onChange,
-    rows = 4,
     ...props
 }) => {
     const [status, setStatus] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
     const [feedback, setFeedback] = useState<string | null>(null);
     const setValidationResult = useResearchStore((state) => state.setValidationResult);
-
-    const handleGenerate = async () => {
-        setStatus('validating');
-        const sessionData = useResearchStore.getState().currentSession?.data || {};
-        const generated = await generateResearchContent(label, sessionData);
-
-        if (generated) {
-            // Manually trigger onChange to update store
-            const event = {
-                target: { value: generated }
-            } as React.ChangeEvent<HTMLTextAreaElement>;
-            onChange(event);
-
-            // After generation, it's usually valid
-            setStatus('valid');
-        } else {
-            setStatus('idle');
-        }
-    };
 
     const handleBlur = async (e: React.FocusEvent<HTMLTextAreaElement>) => {
         const value = e.target.value;
@@ -71,11 +48,9 @@ export const QuantumInput: React.FC<QuantumInputProps> = ({
     };
 
     return (
-        <div className="space-y-3 relative group">
-            <div className="flex justify-between items-center mb-1">
-                <label className="text-xs font-bold uppercase tracking-widest text-slate-600 dark:text-slate-400">
-                    {label}
-                </label>
+        <div className="space-y-2">
+            <div className="flex justify-between items-center">
+                <label className="text-sm font-bold text-foreground">{label}</label>
                 {status === 'validating' && (
                     <div className="flex items-center gap-1.5 text-primary text-[10px] uppercase font-bold animate-pulse">
                         <Loader2 className="w-3 h-3 animate-spin" />
@@ -90,41 +65,33 @@ export const QuantumInput: React.FC<QuantumInputProps> = ({
                 )}
             </div>
 
-            <div className="relative">
+            <div className="relative group">
                 <textarea
                     {...props}
-                    rows={rows}
                     onBlur={handleBlur}
-                    onChange={onChange}
                     className={cn(
-                        "w-full bg-white dark:bg-zinc-900 border-slate-200 dark:border-slate-800 rounded-xl px-5 py-4 pr-16 text-lg focus:border-primary focus:ring-primary transition-all duration-200 outline-none placeholder:text-slate-400 dark:placeholder:text-slate-600 resize-none",
-                        status === 'invalid' && "border-amber-500/50 focus:ring-amber-500/20",
+                        "w-full min-h-[100px] bg-background border rounded-xl p-4 text-sm focus:outline-none focus:ring-2 transition-all resize-y",
+                        status === 'invalid'
+                            ? "border-amber-500/50 focus:ring-amber-500/20"
+                            : "border-border focus:ring-primary/20 focus:border-primary",
                         className
                     )}
                 />
 
-                <button
-                    onClick={handleGenerate}
-                    className="absolute top-4 right-4 p-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg transition-colors group/btn flex items-center gap-1 z-10 disabled:opacity-50"
-                    type="button"
-                    title="Generate with AI"
-                    disabled={status === 'validating'}
-                >
-                    <Sparkles className={cn(
-                        "w-4 h-4 transition-all duration-300",
-                        status === 'validating' ? "animate-spin" : ""
-                    )} />
-                    <span className="text-[10px] font-bold uppercase pr-1 hidden group-hover/btn:inline">Generate with AI</span>
-                </button>
+                {/* Visual Flair */}
+                <Sparkles className={cn(
+                    "absolute top-3 right-3 w-4 h-4 transition-colors duration-300",
+                    status === 'valid' ? "text-emerald-500" : "text-muted-foreground/20"
+                )} />
             </div>
 
             {/* Error / Feedback Message */}
             {status === 'invalid' && feedback && (
-                <div className="flex gap-3 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="flex gap-3 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
                     <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                     <div>
-                        <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-0.5">Quantum Guard Suggestions</p>
-                        <p className="text-xs text-muted-foreground leading-relaxed italic">{feedback}</p>
+                        <p className="text-xs font-bold text-amber-600 mb-0.5">Quantum Guard Suggestions</p>
+                        <p className="text-xs text-muted-foreground leading-relaxed">{feedback}</p>
                     </div>
                 </div>
             )}
